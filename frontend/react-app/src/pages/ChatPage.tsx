@@ -11,6 +11,7 @@ import {
   Menu,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export function ChatPage() {
   const [input, setInput] = useState('');
@@ -182,7 +183,7 @@ export function ChatPage() {
                   </div>
                 ) : (
                   <div className="markdown-content max-w-none">
-                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
                   </div>
                 )}
               </div>
@@ -194,7 +195,7 @@ export function ChatPage() {
             <div className="flex justify-start">
               <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-white border border-gray-200">
                 <div className="markdown-content max-w-none">
-                  <ReactMarkdown>{streamingContent}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingContent}</ReactMarkdown>
                 </div>
                 <span className="inline-block w-2 h-4 bg-blue-600 ml-1 animate-pulse" />
               </div>
