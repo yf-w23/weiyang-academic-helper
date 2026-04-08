@@ -181,7 +181,7 @@ export function ChatPage() {
                     <span>{message.content}</span>
                   </div>
                 ) : (
-                  <div className="prose prose-sm max-w-none">
+                  <div className="markdown-content max-w-none">
                     <ReactMarkdown>{message.content}</ReactMarkdown>
                   </div>
                 )}
@@ -193,7 +193,7 @@ export function ChatPage() {
           {isStreaming && streamingContent && (
             <div className="flex justify-start">
               <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-white border border-gray-200">
-                <div className="prose prose-sm max-w-none">
+                <div className="markdown-content max-w-none">
                   <ReactMarkdown>{streamingContent}</ReactMarkdown>
                 </div>
                 <span className="inline-block w-2 h-4 bg-blue-600 ml-1 animate-pulse" />
