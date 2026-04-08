@@ -1,0 +1,304 @@
+{
+  "metadata": {
+    "description": "课程先修关系数据 - 未央书院培养方案",
+    "last_updated": "2026-04-03",
+    "total_relations": 42,
+    "categories": ["数理基础", "计算机基础", "专业核心", "专业方向", "通识基础"]
+  },
+  "prerequisites": [
+    {
+      "course_code": "10421075",
+      "course_name": "微积分A(1)",
+      "prerequisites": [],
+      "prerequisite_names": [],
+      "type": "suggested"
+    },
+    {
+      "course_code": "10421084",
+      "course_name": "微积分A(2)",
+      "prerequisites": ["10421075"],
+      "prerequisite_names": ["微积分A(1)"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "10421102",
+      "course_name": "高等线性代数选讲",
+      "prerequisites": ["10421084"],
+      "prerequisite_names": ["微积分A(2)"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "10421133",
+      "course_name": "线性代数",
+      "prerequisites": ["10421075"],
+      "prerequisite_names": ["微积分A(1)"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "10421324",
+      "course_name": "概率论与数理统计",
+      "prerequisites": ["10421084", "10421133"],
+      "prerequisite_names": ["微积分A(2)", "线性代数"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "20450023",
+      "course_name": "复变函数与数理方程",
+      "prerequisites": ["10421084", "10421133"],
+      "prerequisite_names": ["微积分A(2)", "线性代数"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "10440012",
+      "course_name": "大学物理A(1)",
+      "prerequisites": ["10421075"],
+      "prerequisite_names": ["微积分A(1)"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "10440022",
+      "course_name": "大学物理A(2)",
+      "prerequisites": ["10440012", "10421084"],
+      "prerequisite_names": ["大学物理A(1)", "微积分A(2)"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "30240532",
+      "course_name": "程序设计基础",
+      "prerequisites": [],
+      "prerequisite_names": [],
+      "type": "suggested"
+    },
+    {
+      "course_code": "30240542",
+      "course_name": "程序设计实践",
+      "prerequisites": ["30240532"],
+      "prerequisite_names": ["程序设计基础"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "40130343",
+      "course_name": "数据结构",
+      "prerequisites": ["30240532", "10421133"],
+      "prerequisite_names": ["程序设计基础", "线性代数"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "40240432",
+      "course_name": "操作系统",
+      "prerequisites": ["40130343", "30240542"],
+      "prerequisite_names": ["数据结构", "程序设计实践"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "40240532",
+      "course_name": "计算机网络",
+      "prerequisites": ["40130343", "40240432"],
+      "prerequisite_names": ["数据结构", "操作系统"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "40130753",
+      "course_name": "编译原理",
+      "prerequisites": ["40130343", "30240542"],
+      "prerequisite_names": ["数据结构", "程序设计实践"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "40130673",
+      "course_name": "数据库系统",
+      "prerequisites": ["40130343"],
+      "prerequisite_names": ["数据结构"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "30130223",
+      "course_name": "计算机组成原理",
+      "prerequisites": ["30240532", "10421133"],
+      "prerequisite_names": ["程序设计基础", "线性代数"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "40130683",
+      "course_name": "计算机体系结构",
+      "prerequisites": ["30130223", "40240432"],
+      "prerequisite_names": ["计算机组成原理", "操作系统"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "30240233",
+      "course_name": "软件工程",
+      "prerequisites": ["40130343", "40130673"],
+      "prerequisite_names": ["数据结构", "数据库系统"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "30130663",
+      "course_name": "人工智能导论",
+      "prerequisites": ["40130343", "10421324"],
+      "prerequisite_names": ["数据结构", "概率论与数理统计"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "30250213",
+      "course_name": "机器学习",
+      "prerequisites": ["10421324", "10421133", "40130343"],
+      "prerequisite_names": ["概率论与数理统计", "线性代数", "数据结构"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "30250223",
+      "course_name": "深度学习",
+      "prerequisites": ["30250213", "30130663"],
+      "prerequisite_names": ["机器学习", "人工智能导论"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "20220044",
+      "course_name": "理论力学",
+      "prerequisites": ["10440012", "10421084"],
+      "prerequisite_names": ["大学物理A(1)", "微积分A(2)"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "20310314",
+      "course_name": "材料力学",
+      "prerequisites": ["20220044", "10421133"],
+      "prerequisite_names": ["理论力学", "线性代数"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "30310464",
+      "course_name": "弹性力学",
+      "prerequisites": ["20310314", "20450023"],
+      "prerequisite_names": ["材料力学", "复变函数与数理方程"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "20220053",
+      "course_name": "流体力学",
+      "prerequisites": ["10440022", "10421084"],
+      "prerequisite_names": ["大学物理A(2)", "微积分A(2)"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "20220123",
+      "course_name": "结构力学",
+      "prerequisites": ["20310314"],
+      "prerequisite_names": ["材料力学"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "20220214",
+      "course_name": "振动理论",
+      "prerequisites": ["20310314", "20450023"],
+      "prerequisite_names": ["材料力学", "复变函数与数理方程"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "20220133",
+      "course_name": "电路原理",
+      "prerequisites": ["10440012", "10421133"],
+      "prerequisite_names": ["大学物理A(1)", "线性代数"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "30220223",
+      "course_name": "模拟电子技术",
+      "prerequisites": ["20220133"],
+      "prerequisite_names": ["电路原理"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "30220323",
+      "course_name": "数字电子技术",
+      "prerequisites": ["20220133", "30240532"],
+      "prerequisite_names": ["电路原理", "程序设计基础"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "40220563",
+      "course_name": "信号与系统",
+      "prerequisites": ["20220133", "20450023"],
+      "prerequisite_names": ["电路原理", "复变函数与数理方程"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "30220553",
+      "course_name": "数字信号处理",
+      "prerequisites": ["40220563", "10421324"],
+      "prerequisite_names": ["信号与系统", "概率论与数理统计"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "40220633",
+      "course_name": "通信原理",
+      "prerequisites": ["40220563", "30220553"],
+      "prerequisite_names": ["信号与系统", "数字信号处理"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "30220283",
+      "course_name": "电磁场与电磁波",
+      "prerequisites": ["20220133", "20450023"],
+      "prerequisite_names": ["电路原理", "复变函数与数理方程"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "30310433",
+      "course_name": "半导体物理",
+      "prerequisites": ["10440022", "10421324"],
+      "prerequisite_names": ["大学物理A(2)", "概率论与数理统计"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "40220643",
+      "course_name": "集成电路设计",
+      "prerequisites": ["30310433", "30220323"],
+      "prerequisite_names": ["半导体物理", "数字电子技术"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "40220653",
+      "course_name": "电力电子技术",
+      "prerequisites": ["20220133"],
+      "prerequisite_names": ["电路原理"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "30310853",
+      "course_name": "自动控制原理",
+      "prerequisites": ["20220133", "20450023"],
+      "prerequisite_names": ["电路原理", "复变函数与数理方程"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "30310863",
+      "course_name": "现代控制理论",
+      "prerequisites": ["30310853", "10421133"],
+      "prerequisite_names": ["自动控制原理", "线性代数"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "20220023",
+      "course_name": "工程制图基础",
+      "prerequisites": [],
+      "prerequisite_names": [],
+      "type": "suggested"
+    },
+    {
+      "course_code": "30240453",
+      "course_name": "计算机图形学",
+      "prerequisites": ["20220023", "40130343", "10421133"],
+      "prerequisite_names": ["工程制图基础", "数据结构", "线性代数"],
+      "type": "suggested"
+    },
+    {
+      "course_code": "10720013",
+      "course_name": "数值分析",
+      "prerequisites": ["10421084", "10421133"],
+      "prerequisite_names": ["微积分A(2)", "线性代数"],
+      "type": "suggested"
+    }
+  ]
+}

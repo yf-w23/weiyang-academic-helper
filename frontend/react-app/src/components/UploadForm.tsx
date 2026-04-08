@@ -4,9 +4,6 @@ import {
   Upload,
   FileText,
   X,
-  ChevronRight,
-  Calendar,
-  GraduationCap,
   Loader2,
   CheckCircle,
   AlertCircle,
@@ -16,15 +13,11 @@ import { cn } from '../lib/utils';
 import { apiClient } from '../api/client';
 import { GapAnalysisResponse } from '../types';
 
-const SUPPORTED_YEARS = [2021, 2022, 2023, 2024, 2025];
-
 interface UploadFormProps {
   onAnalysisComplete: (result: GapAnalysisResponse) => void;
 }
 
 export function UploadForm({ onAnalysisComplete }: UploadFormProps) {
-  const [year, setYear] = useState<number>(2023);
-  const [className, setClassName] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,8 +48,8 @@ export function UploadForm({ onAnalysisComplete }: UploadFormProps) {
   });
 
   const handleAnalyze = async () => {
-    if (!file || !className.trim()) {
-      setError('请填写完整信息并上传成绩单');
+    if (!file) {
+      setError('请上传成绩单');
       return;
     }
 
@@ -72,7 +65,7 @@ export function UploadForm({ onAnalysisComplete }: UploadFormProps) {
         });
       }, 600);
 
-      const result = await apiClient.uploadTranscript(year, className.trim(), file);
+      const result = await apiClient.uploadTranscript(file);
 
       clearInterval(progressInterval);
       setProgress(100);
@@ -90,7 +83,7 @@ export function UploadForm({ onAnalysisComplete }: UploadFormProps) {
     setError(null);
   };
 
-  const isReady = file && className.trim();
+  const isReady = !!file;
 
   return (
     <section id="analysis-form" className="py-24 relative">
@@ -108,7 +101,7 @@ export function UploadForm({ onAnalysisComplete }: UploadFormProps) {
             上传成绩单
           </h2>
           <p className="text-navy-500 max-w-lg mx-auto">
-            填写基本信息，上传 PDF 成绩单，AI 将自动分析你的培养方案缺口
+            上传 PDF 成绩单，AI 将自动识别你的年级班级并分析培养方案缺口
           </p>
         </div>
 
@@ -125,18 +118,8 @@ export function UploadForm({ onAnalysisComplete }: UploadFormProps) {
             <div className="flex items-center justify-center">
               <StepIndicator 
                 number={1} 
-                label="基本信息" 
-                active={true} 
-                completed={!!className} 
-              />
-              <div className={cn(
-                "w-16 h-px mx-4 transition-colors duration-500",
-                file ? "bg-amber-400" : "bg-navy-200"
-              )} />
-              <StepIndicator 
-                number={2} 
                 label="上传成绩单" 
-                active={!!file} 
+                active={true} 
                 completed={!!file} 
               />
               <div className={cn(
@@ -144,7 +127,7 @@ export function UploadForm({ onAnalysisComplete }: UploadFormProps) {
                 isAnalyzing ? "bg-amber-400 animate-pulse" : "bg-navy-200"
               )} />
               <StepIndicator 
-                number={3} 
+                number={2} 
                 label="智能分析" 
                 active={isAnalyzing} 
                 completed={false} 
@@ -153,48 +136,6 @@ export function UploadForm({ onAnalysisComplete }: UploadFormProps) {
           </div>
 
           <div className="p-8">
-            {/* Form fields */}
-            <div className="grid md:grid-cols-2 gap-6 mb-8">
-              {/* Year select */}
-              <div className="space-y-3">
-                <label className="flex items-center gap-2 text-sm font-medium text-navy-700">
-                  <Calendar className="w-4 h-4 text-amber-600" />
-                  入学年份
-                </label>
-                <div className="relative">
-                  <select
-                    value={year}
-                    onChange={(e) => setYear(Number(e.target.value))}
-                    disabled={isAnalyzing}
-                    className="input-field appearance-none cursor-pointer"
-                  >
-                    {SUPPORTED_YEARS.map((y) => (
-                      <option key={y} value={y}>{y} 级</option>
-                    ))}
-                  </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                    <ChevronRight className="w-5 h-5 text-navy-400 rotate-90" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Class name input */}
-              <div className="space-y-3">
-                <label className="flex items-center gap-2 text-sm font-medium text-navy-700">
-                  <GraduationCap className="w-4 h-4 text-amber-600" />
-                  班级名称
-                </label>
-                <input
-                  type="text"
-                  value={className}
-                  onChange={(e) => setClassName(e.target.value)}
-                  placeholder="例如：未央-机械31"
-                  disabled={isAnalyzing}
-                  className="input-field"
-                />
-              </div>
-            </div>
-
             {/* File upload area */}
             <div className="space-y-3 mb-8">
               <label className="flex items-center gap-2 text-sm font-medium text-navy-700">

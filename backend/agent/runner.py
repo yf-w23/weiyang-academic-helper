@@ -6,11 +6,12 @@ from typing import Optional
 from backend.agent.graph import get_graph, GapAnalysisState
 from backend.agent.tools import extract_transcript_from_pdf
 from backend.config import settings
+from backend.services.transcript_parser import extract_student_info
 
 
 def run_gap_analysis(
-    year: str,
-    class_name: str,
+    year: Optional[str] = None,
+    class_name: Optional[str] = None,
     pdf_path: Optional[str] = None,
     transcript_md: Optional[str] = None
 ) -> dict:
@@ -20,8 +21,10 @@ def run_gap_analysis(
     Can be called from API endpoints or directly.
     
     Args:
-        year: Student enrollment year (e.g., "2021")
-        class_name: Class identifier (e.g., "未央-软件11")
+        year: Student enrollment year (e.g., "2021"). If not provided, will be
+              extracted from the transcript automatically.
+        class_name: Class identifier (e.g., "未央-软件11"). If not provided,
+                    will be extracted from the transcript automatically.
         pdf_path: Path to transcript PDF (if transcript_md not provided)
         transcript_md: Pre-extracted transcript markdown (if pdf_path not provided)
         
@@ -31,6 +34,45 @@ def run_gap_analysis(
         - result: Analysis result string (if success)
         - error: Error message (if not success)
     """
+    # Extract from PDF if path provided and no transcript yet
+    if pdf_path and not transcript_md:
+        try:
+            transcript_md = extract_transcript_from_pdf(pdf_path)
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Failed to extract transcript: {str(e)}",
+                "result": None
+            }
+    
+    # Validate we have transcript
+    if not transcript_md:
+        return {
+            "success": False,
+            "error": "No transcript provided (need pdf_path or transcript_md)",
+            "result": None
+        }
+    
+    # Auto-extract year and class_name from transcript if not provided
+    if not year or not class_name:
+        info = extract_student_info(transcript_md)
+        if not year:
+            year = info.get("year")
+        if not class_name:
+            class_name = info.get("class_name")
+    
+    if not year or not class_name:
+        missing = []
+        if not year:
+            missing.append("入学年份")
+        if not class_name:
+            missing.append("班级")
+        return {
+            "success": False,
+            "error": f"无法从成绩单中自动识别{ '、'.join(missing) }，请确认上传的是有效的清华大学成绩单",
+            "result": None
+        }
+    
     # Build initial state
     state: GapAnalysisState = {
         "year": year,
@@ -40,25 +82,6 @@ def run_gap_analysis(
         "result": None,
         "error": None,
     }
-    
-    # Extract from PDF if path provided and no transcript yet
-    if pdf_path and not transcript_md:
-        try:
-            state["transcript_md"] = extract_transcript_from_pdf(pdf_path)
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"Failed to extract transcript: {str(e)}",
-                "result": None
-            }
-    
-    # Validate we have transcript
-    if not state["transcript_md"]:
-        return {
-            "success": False,
-            "error": "No transcript provided (need pdf_path or transcript_md)",
-            "result": None
-        }
     
     # Run the graph
     try:
@@ -87,8 +110,8 @@ def run_gap_analysis(
 
 
 def run_gap_analysis_with_llm(
-    year: str,
-    class_name: str,
+    year: Optional[str] = None,
+    class_name: Optional[str] = None,
     pdf_path: Optional[str] = None,
     transcript_md: Optional[str] = None
 ) -> dict:

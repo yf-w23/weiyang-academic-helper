@@ -1,0 +1,1023 @@
+
+    <link href="../../../components/bootstrap/Bootstrap-css/bootstrap.min.css" rel="stylesheet" media="screen">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<script>
+function initTopLocal(){
+
+}
+</script>
+
+
+
+
+<html>
+<head>
+<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE8,chrome=1" />
+<title></title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="Expires" CONTENT="0">
+<meta http-equiv="Cache-Control" CONTENT="no-cache">
+<meta http-equiv="Pragma" CONTENT="no-cache">
+
+<link href="css/reset.css" rel="stylesheet" type="text/css">
+<link href="css/css.css" rel="stylesheet" type="text/css">
+<script src="jQuery/jquery-1.7.1.min.js" type="text/javascript"></script>
+
+<script type="text/javascript" src="scripts/grid.js"></script>
+<script type="text/javascript" src="scripts/prototype.js"></script>
+<script type="text/javascript" src="scripts/gbp/page.js"></script>
+<script type="text/javascript" src="scripts/gbp/selectlist.js"></script>
+<script type="text/javascript" src="scripts/gbp/validation.js"></script>
+<script type="text/javascript" src="scripts/gbp/datepicker.js"></script>
+<script type="text/javascript" src="scripts/gbp/menu.js"></script>
+<script type="text/javascript" src="scripts/validator.jsp"></script>
+<script type="text/javascript" src="scripts/zhjw/pubFunction.js"></script>
+
+
+
+</head>
+
+<body>
+<div class="waiKuang">
+    <div class="header clearfix"> 
+		<a href="#"><img class="logo" src="../images/zhjw/xk/4_03.jpg"></a>
+    </div>
+</div>
+      	
+
+
+
+
+<script>
+function initTopLocal(){
+   //initTop("image","images/zhjw/text.png","本科生选课系统");
+   //initTop("text","","本科生选课系统");
+   //initTopPart("text","本科生选课系统");
+
+   
+   
+   
+   	 
+       ;
+   
+   initTopPart("text","教师网上录入课堂信息");
+   //showPath("&nbsp;&nbsp;<span class='copyright_zi_hui_b_shadow'>您当前的位置：</span>&nbsp;教师网上录入课堂信息&gt&gt");
+   //是否显示路径
+   isShowPath(false);
+   
+}
+</script>
+
+
+
+
+
+<div id="isShow"><div class="" id="pathTd"></div></div>
+<div class="" id="pathTd" style="width:100%">
+  	<div class="" id="window_title" style="padding:12px;">
+    	&nbsp;&nbsp;<div id="SubComtent"  style="font-size:18px;font-weight: bold; " align="left"><span class=""></span></div>
+    	<div class="">&nbsp;</div>
+  	</div>
+	<div class=""  id="" style="padding:12px;width:100% \9">
+
+
+
+<!--如果有kcfldm为001的则为本科生，调转到本科生页面-->
+
+
+
+<script>
+window.document.title = "教师网上录入课堂信息";
+function doEdit(){ //修改
+  var frm = window.document.frm;
+  frm.action="js.vjsKcbBs.do";
+    if(confirmSubmited(frm)){
+      frm.m.value = "edit";
+      frm.submit(); 
+	}
+}
+//初始化下拉框的值
+function setInitValue(){
+  initTopLocal();
+  with(document.frm){
+  }
+}
+Event.observe(window, "load", setInitValue, false);
+</script>
+    <style type="text/css">
+
+
+    </style>
+
+<form name="frm" action="js.vjsKcbBs.do" method="post" >
+<input type="hidden" name="token" value="433e10d8cbaadf5ffdf51681dfb6d5f1">
+<input type="hidden" name="m" value="saveEdit">
+<input type="hidden" name="p_id" value="2006990132;70240063">
+
+
+<!--信息编辑页面总表格 editDisplay总表格样式-->
+
+    <!--编辑页面名称标题表格 结束-->
+
+    <!--编辑部分表格 开始-->
+    <table class="table table-striped table-condensed" align="center" style="width:100%;">
+    <tr>
+      <td width=100% style="border-top: 0px;">
+
+
+
+
+
+
+<table class="table-striped">
+ 
+		<tr>
+
+		<td width="20%" height="25" align="left" bgcolor=""  class="bgx">
+			<div align="right">
+			<!--课程号：  -->课程号：
+			</div>
+		</td>
+		
+		<td width="30%" align="left" bgcolor=""  class="bgx">
+
+			70240063
+
+		</td>
+	
+
+		<td width="10%" height="25" align="right" bgcolor=""  class="bgx">
+			<div align="right">
+			<!--课程名：  -->课程名：
+			</div>
+		</td>
+		<td align="left" bgcolor=""  class="bgx">
+
+			分布式数据库系统
+
+		</td>
+	</tr>
+
+	<tr>
+
+		<td width="" height="25" align="right" bgcolor=""  class="bgx">
+			<div align="right">
+			<!--学时：  -->学时：
+			</div>
+		</td>
+		<td align="left" bgcolor=""  class="bgx">
+
+			48
+
+		</td>
+
+		<td height="25" align="right" bgcolor=""  class="bgx">
+			<div align="right">
+			<!--学分：  -->学分：
+			</div>
+		</td>
+		<td align="left" bgcolor=""  class="bgx">
+
+			                3
+
+		</td>
+	</tr>
+    <tr>
+		
+
+		<td height="" align="right" bgcolor=""  class="bgx">
+			<div align="right">
+			<!--课程简介：  -->课程简介：
+			</div>
+		</td>
+		<td align="left" bgcolor=""  colspan="3" class="bgx">
+
+			课程目标包括：1）巩固、加深数据库系统的基础知识，理解集中式数据库的不足与分布式数据库的优势；2) 掌握分布式数据库系统的基本原理和实现技术；3）了解当今分布式数据管理与应用中的前沿问题，包括并行与流数据管理、数据仓库与在线事务分析、NoSQL与NewSQL等；4) 构建一个分布式场景下的数据中心。
+课程结束后，学生将1）熟知当前构建分布式数据库系统和服务的基本模型与实现方法；2）运用所学模型和方法解决具体问题；3）了解数据管理领域的研究方向和可能的研究结果；4）锻炼就某一问题展开研究的能力，包括查找相关资料、分析问题、解决问题，以及答案测试等；5）具备应用所学知识，解决一个实际大数据管理问题的能力。
+
+
+		</td>
+	</tr>
+	<tr>
+     <td height="" align="right" bgcolor=""   class="bgx">
+			<div align="right">
+			<!--英文课程简介：  -->英文课程简介：
+			</div>
+		</td>
+		<td align="left" bgcolor=""  colspan="3" class="bgx">
+
+			Course Objectives: 1) to enhance the previous knowledge of database systems by deepening the understanding of the theoretical and practical aspects of the database technologies; showing the need for distributed database technology to tackle deficiencies of centralized database systems; 2) to introduce basic principles and implementation techniques of distributed database systems, including distributed database design and architecture, query processing and optimization, transaction management, recovery, and reliability protocols; 3) to expose active and emerging research issues in distributed database systems and application development, including parallel and streaming data management, data warehousing and OLAP, NoSQL and NewSQL; 4) to apply theory to practice by building a data center in a distributed context.
+
+After the course, the students can 1) get familiar with the currently available models, technologies for and approaches to building distributed database systems; 2) have developed practical skills in the use of these models and approaches to be able to select and apply the appropriate methods for a particular case; 3) be aware of the current research directions in the field and their possible outcomes; 4) be able to carry out research on a relevant topic, identify primary references, analyze them, and come up with meaningful conclusions; 5) be able to apply learned skills to solving a big data management problem.
+
+		</td>
+</tr>
+	<tr>
+
+		<td height="" align="right" bgcolor=""  class="bgx">
+			<div align="right">
+			<!--课程教学大纲：  -->课程教学大纲：
+			</div>
+		</td>
+		<td align="left" bgcolor=""  class="bgx">
+
+			  <font color=#0066FF><!--目前没有可下载的教学大纲  -->目前没有可下载的教学大纲</font>
+
+		</td>
+
+
+		<td height="25" align="right" bgcolor=""  class="bgx">
+			<div align="right">
+			<!--进度安排：  -->进度安排：
+			</div>
+		</td>
+		<td align="left" bgcolor=""  class="bgx">
+
+			 <p>&nbsp;</p>
+<p class="MsoNormal" style="line-height:120%;layout-grid-mode:char"><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US">1. </span><span style="mso-bidi-font-size:10.5pt;line-height:120%;font-family:宋体;mso-ascii-font-family:&#10;" times="" new="">课程介绍</span><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US"> Course Overview </span></p>
+<p class="MsoNormal" style="line-height:120%;layout-grid-mode:char"><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US">2. </span><span style="mso-bidi-font-size:10.5pt;line-height:120%;font-family:宋体;mso-ascii-font-family:&#10;" times="" new="">数据管理技术的发展历程</span><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US"> Historic Development of Data Management Technologies </span></p>
+<p class="MsoNormal" style="line-height:120%;layout-grid-mode:char"><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US">3. </span><span style="mso-bidi-font-size:10.5pt;line-height:120%;font-family:宋体;mso-ascii-font-family:&#10;" times="" new="">分布式数据库系统简介</span><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US"> Introduction to Distributed Database Systems</span></p>
+<p class="MsoNormal" style="line-height:120%;layout-grid-mode:char"><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US">4. </span><span style="mso-bidi-font-size:10.5pt;line-height:120%;font-family:宋体;mso-ascii-font-family:&#10;" times="" new="">分布式数据库设计</span><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US"> Distributed Database Design</span></p>
+<p class="MsoNormal" style="line-height:120%;layout-grid-mode:char"><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US">5. </span><span style="mso-bidi-font-size:10.5pt;line-height:120%;font-family:宋体;mso-ascii-font-family:&#10;" times="" new="">分布式数据库查询处理</span><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US">&nbsp; Distributed Database Query Processing</span></p>
+<p class="MsoNormal" style="line-height:120%;layout-grid-mode:char"><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US">6. </span><span style="mso-bidi-font-size:10.5pt;line-height:120%;font-family:宋体;mso-ascii-font-family:&#10;" times="" new="">分布查询优化</span><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US"> Optimization of Distributed Database Queries</span></p>
+<p class="MsoNormal" style="line-height:120%;layout-grid-mode:char"><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US">7. </span><span style="mso-bidi-font-size:10.5pt;line-height:120%;font-family:宋体;mso-ascii-font-family:&#10;" times="" new="">分布式事务管理</span><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US"> Distributed Transaction Management</span></p>
+<p class="MsoNormal" style="line-height:120%;layout-grid-mode:char"><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US">8. </span><span style="mso-bidi-font-size:10.5pt;line-height:120%;font-family:宋体;mso-ascii-font-family:&#10;" times="" new="">分布式并发控制</span><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US"> Distributed Concurrency Control</span></p>
+<p class="MsoNormal" style="line-height:120%;layout-grid-mode:char"><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US">9. </span><span style="mso-bidi-font-size:10.5pt;line-height:120%;font-family:宋体;mso-ascii-font-family:&#10;" times="" new="">分布式数据库的故障恢复与可靠性</span><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US"> Failure Recovery and Reliability in Distributed Databases</span></p>
+<p class="MsoNormal" style="line-height:120%;layout-grid-mode:char"><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US">10.</span><span style="mso-bidi-font-size:10.5pt;line-height:120%;font-family:宋体;mso-ascii-font-family:&#10;" times="" new="">当今数据管理技术</span><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US"> State-of-Art Data Management Technologies&nbsp;</span></p>
+<p class="MsoNormal" style="line-height:120%;layout-grid-mode:char"><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US">11.</span><span style="mso-bidi-font-size:10.5pt;line-height:120%;font-family:宋体;mso-ascii-font-family:&#10;" times="" new="">并行流数据管理技术</span><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US"> Parallel and Streaming Data Management Technologies </span></p>
+<p class="MsoNormal" style="line-height:120%;layout-grid-mode:char"><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US">12.</span><span style="mso-bidi-font-size:10.5pt;line-height:120%;font-family:宋体;mso-ascii-font-family:&#10;" times="" new="">数据仓库与在线分析处理</span><span style="mso-bidi-font-size:10.5pt;line-height:120%" lang="EN-US">&nbsp;Data Warehousing &amp; OLAP</span><!--[if gte mso 9]><xml>
+<w:WordDocument>
+<w:View>Normal</w:View>
+<w:Zoom>0</w:Zoom>
+<w:TrackMoves />
+<w:TrackFormatting />
+<w:PunctuationKerning />
+<w:DrawingGridVerticalSpacing>7.8 磅</w:DrawingGridVerticalSpacing>
+<w:DisplayHorizontalDrawingGridEvery>0</w:DisplayHorizontalDrawingGridEvery>
+<w:DisplayVerticalDrawingGridEvery>2</w:DisplayVerticalDrawingGridEvery>
+<w:ValidateAgainstSchemas />
+<w:SaveIfXMLInvalid>false</w:SaveIfXMLInvalid>
+<w:IgnoreMixedContent>false</w:IgnoreMixedContent>
+<w:AlwaysShowPlaceholderText>false</w:AlwaysShowPlaceholderText>
+<w:DoNotPromoteQF />
+<w:LidThemeOther>EN-US</w:LidThemeOther>
+<w:LidThemeAsian>ZH-CN</w:LidThemeAsian>
+<w:LidThemeComplexScript>X-NONE</w:LidThemeComplexScript>
+<w:Compatibility>
+<w:SpaceForUL />
+<w:BalanceSingleByteDoubleByteWidth />
+<w:DoNotLeaveBackslashAlone />
+<w:ULTrailSpace />
+<w:DoNotExpandShiftReturn />
+<w:AdjustLineHeightInTable />
+<w:BreakWrappedTables />
+<w:SnapToGridInCell />
+<w:WrapTextWithPunct />
+<w:UseAsianBreakRules />
+<w:DontGrowAutofit />
+<w:SplitPgBreakAndParaMark />
+<w:EnableOpenTypeKerning />
+<w:DontFlipMirrorIndents />
+<w:OverrideTableStyleHps />
+<w:UseFELayout />
+</w:Compatibility>
+<m:mathPr>
+<m:mathFont m:val="Cambria Math" />
+<m:brkBin m:val="before" />
+<m:brkBinSub m:val="--" />
+<m:smallFrac m:val="off" />
+<m:dispDef />
+<m:lMargin m:val="0" />
+<m:rMargin m:val="0" />
+<m:defJc m:val="centerGroup" />
+<m:wrapIndent m:val="1440" />
+<m:intLim m:val="subSup" />
+<m:naryLim m:val="undOvr" />
+</m:mathPr></w:WordDocument>
+</xml><![endif]--><!--[if gte mso 9]><xml>
+<w:LatentStyles DefLockedState="false" DefUnhideWhenUsed="false"
+DefSemiHidden="false" DefQFormat="false" DefPriority="99"
+LatentStyleCount="371">
+<w:LsdException Locked="false" Priority="0" QFormat="true" Name="Normal" />
+<w:LsdException Locked="false" Priority="9" QFormat="true" Name="heading 1" />
+<w:LsdException Locked="false" Priority="9" SemiHidden="true"
+UnhideWhenUsed="true" QFormat="true" Name="heading 2" />
+<w:LsdException Locked="false" Priority="9" SemiHidden="true"
+UnhideWhenUsed="true" QFormat="true" Name="heading 3" />
+<w:LsdException Locked="false" Priority="9" SemiHidden="true"
+UnhideWhenUsed="true" QFormat="true" Name="heading 4" />
+<w:LsdException Locked="false" Priority="9" SemiHidden="true"
+UnhideWhenUsed="true" QFormat="true" Name="heading 5" />
+<w:LsdException Locked="false" Priority="9" SemiHidden="true"
+UnhideWhenUsed="true" QFormat="true" Name="heading 6" />
+<w:LsdException Locked="false" Priority="9" SemiHidden="true"
+UnhideWhenUsed="true" QFormat="true" Name="heading 7" />
+<w:LsdException Locked="false" Priority="9" SemiHidden="true"
+UnhideWhenUsed="true" QFormat="true" Name="heading 8" />
+<w:LsdException Locked="false" Priority="9" SemiHidden="true"
+UnhideWhenUsed="true" QFormat="true" Name="heading 9" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="index 1" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="index 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="index 3" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="index 4" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="index 5" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="index 6" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="index 7" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="index 8" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="index 9" />
+<w:LsdException Locked="false" Priority="39" SemiHidden="true"
+UnhideWhenUsed="true" Name="toc 1" />
+<w:LsdException Locked="false" Priority="39" SemiHidden="true"
+UnhideWhenUsed="true" Name="toc 2" />
+<w:LsdException Locked="false" Priority="39" SemiHidden="true"
+UnhideWhenUsed="true" Name="toc 3" />
+<w:LsdException Locked="false" Priority="39" SemiHidden="true"
+UnhideWhenUsed="true" Name="toc 4" />
+<w:LsdException Locked="false" Priority="39" SemiHidden="true"
+UnhideWhenUsed="true" Name="toc 5" />
+<w:LsdException Locked="false" Priority="39" SemiHidden="true"
+UnhideWhenUsed="true" Name="toc 6" />
+<w:LsdException Locked="false" Priority="39" SemiHidden="true"
+UnhideWhenUsed="true" Name="toc 7" />
+<w:LsdException Locked="false" Priority="39" SemiHidden="true"
+UnhideWhenUsed="true" Name="toc 8" />
+<w:LsdException Locked="false" Priority="39" SemiHidden="true"
+UnhideWhenUsed="true" Name="toc 9" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Normal Indent" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="footnote text" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="annotation text" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="header" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="footer" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="index heading" />
+<w:LsdException Locked="false" Priority="35" SemiHidden="true"
+UnhideWhenUsed="true" QFormat="true" Name="caption" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="table of figures" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="envelope address" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="envelope return" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="footnote reference" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="annotation reference" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="line number" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="page number" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="endnote reference" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="endnote text" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="table of authorities" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="macro" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="toa heading" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List Bullet" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List Number" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List 3" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List 4" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List 5" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List Bullet 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List Bullet 3" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List Bullet 4" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List Bullet 5" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List Number 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List Number 3" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List Number 4" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List Number 5" />
+<w:LsdException Locked="false" Priority="10" QFormat="true" Name="Title" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Closing" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Signature" />
+<w:LsdException Locked="false" Priority="1" SemiHidden="true"
+UnhideWhenUsed="true" Name="Default Paragraph Font" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Body Text" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Body Text Indent" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List Continue" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List Continue 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List Continue 3" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List Continue 4" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="List Continue 5" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Message Header" />
+<w:LsdException Locked="false" Priority="11" QFormat="true" Name="Subtitle" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Salutation" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Date" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Body Text First Indent" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Body Text First Indent 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Note Heading" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Body Text 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Body Text 3" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Body Text Indent 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Body Text Indent 3" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Block Text" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Hyperlink" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="FollowedHyperlink" />
+<w:LsdException Locked="false" Priority="22" QFormat="true" Name="Strong" />
+<w:LsdException Locked="false" Priority="20" QFormat="true" Name="Emphasis" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Document Map" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Plain Text" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="E-mail Signature" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="HTML Top of Form" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="HTML Bottom of Form" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Normal (Web)" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="HTML Acronym" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="HTML Address" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="HTML Cite" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="HTML Code" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="HTML Definition" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="HTML Keyboard" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="HTML Preformatted" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="HTML Sample" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="HTML Typewriter" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="HTML Variable" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Normal Table" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="annotation subject" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="No List" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Outline List 1" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Outline List 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Outline List 3" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Simple 1" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Simple 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Simple 3" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Classic 1" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Classic 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Classic 3" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Classic 4" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Colorful 1" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Colorful 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Colorful 3" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Columns 1" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Columns 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Columns 3" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Columns 4" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Columns 5" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Grid 1" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Grid 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Grid 3" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Grid 4" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Grid 5" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Grid 6" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Grid 7" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Grid 8" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table List 1" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table List 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table List 3" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table List 4" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table List 5" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table List 6" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table List 7" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table List 8" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table 3D effects 1" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table 3D effects 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table 3D effects 3" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Contemporary" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Elegant" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Professional" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Subtle 1" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Subtle 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Web 1" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Web 2" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Web 3" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Balloon Text" />
+<w:LsdException Locked="false" Priority="39" Name="Table Grid" />
+<w:LsdException Locked="false" SemiHidden="true" UnhideWhenUsed="true"
+Name="Table Theme" />
+<w:LsdException Locked="false" SemiHidden="true" Name="Placeholder Text" />
+<w:LsdException Locked="false" Priority="1" QFormat="true" Name="No Spacing" />
+<w:LsdException Locked="false" Priority="60" Name="Light Shading" />
+<w:LsdException Locked="false" Priority="61" Name="Light List" />
+<w:LsdException Locked="false" Priority="62" Name="Light Grid" />
+<w:LsdException Locked="false" Priority="63" Name="Medium Shading 1" />
+<w:LsdException Locked="false" Priority="64" Name="Medium Shading 2" />
+<w:LsdException Locked="false" Priority="65" Name="Medium List 1" />
+<w:LsdException Locked="false" Priority="66" Name="Medium List 2" />
+<w:LsdException Locked="false" Priority="67" Name="Medium Grid 1" />
+<w:LsdException Locked="false" Priority="68" Name="Medium Grid 2" />
+<w:LsdException Locked="false" Priority="69" Name="Medium Grid 3" />
+<w:LsdException Locked="false" Priority="70" Name="Dark List" />
+<w:LsdException Locked="false" Priority="71" Name="Colorful Shading" />
+<w:LsdException Locked="false" Priority="72" Name="Colorful List" />
+<w:LsdException Locked="false" Priority="73" Name="Colorful Grid" />
+<w:LsdException Locked="false" Priority="60" Name="Light Shading Accent 1" />
+<w:LsdException Locked="false" Priority="61" Name="Light List Accent 1" />
+<w:LsdException Locked="false" Priority="62" Name="Light Grid Accent 1" />
+<w:LsdException Locked="false" Priority="63" Name="Medium Shading 1 Accent 1" />
+<w:LsdException Locked="false" Priority="64" Name="Medium Shading 2 Accent 1" />
+<w:LsdException Locked="false" Priority="65" Name="Medium List 1 Accent 1" />
+<w:LsdException Locked="false" SemiHidden="true" Name="Revision" />
+<w:LsdException Locked="false" Priority="34" QFormat="true"
+Name="List Paragraph" />
+<w:LsdException Locked="false" Priority="29" QFormat="true" Name="Quote" />
+<w:LsdException Locked="false" Priority="30" QFormat="true"
+Name="Intense Quote" />
+<w:LsdException Locked="false" Priority="66" Name="Medium List 2 Accent 1" />
+<w:LsdException Locked="false" Priority="67" Name="Medium Grid 1 Accent 1" />
+<w:LsdException Locked="false" Priority="68" Name="Medium Grid 2 Accent 1" />
+<w:LsdException Locked="false" Priority="69" Name="Medium Grid 3 Accent 1" />
+<w:LsdException Locked="false" Priority="70" Name="Dark List Accent 1" />
+<w:LsdException Locked="false" Priority="71" Name="Colorful Shading Accent 1" />
+<w:LsdException Locked="false" Priority="72" Name="Colorful List Accent 1" />
+<w:LsdException Locked="false" Priority="73" Name="Colorful Grid Accent 1" />
+<w:LsdException Locked="false" Priority="60" Name="Light Shading Accent 2" />
+<w:LsdException Locked="false" Priority="61" Name="Light List Accent 2" />
+<w:LsdException Locked="false" Priority="62" Name="Light Grid Accent 2" />
+<w:LsdException Locked="false" Priority="63" Name="Medium Shading 1 Accent 2" />
+<w:LsdException Locked="false" Priority="64" Name="Medium Shading 2 Accent 2" />
+<w:LsdException Locked="false" Priority="65" Name="Medium List 1 Accent 2" />
+<w:LsdException Locked="false" Priority="66" Name="Medium List 2 Accent 2" />
+<w:LsdException Locked="false" Priority="67" Name="Medium Grid 1 Accent 2" />
+<w:LsdException Locked="false" Priority="68" Name="Medium Grid 2 Accent 2" />
+<w:LsdException Locked="false" Priority="69" Name="Medium Grid 3 Accent 2" />
+<w:LsdException Locked="false" Priority="70" Name="Dark List Accent 2" />
+<w:LsdException Locked="false" Priority="71" Name="Colorful Shading Accent 2" />
+<w:LsdException Locked="false" Priority="72" Name="Colorful List Accent 2" />
+<w:LsdException Locked="false" Priority="73" Name="Colorful Grid Accent 2" />
+<w:LsdException Locked="false" Priority="60" Name="Light Shading Accent 3" />
+<w:LsdException Locked="false" Priority="61" Name="Light List Accent 3" />
+<w:LsdException Locked="false" Priority="62" Name="Light Grid Accent 3" />
+<w:LsdException Locked="false" Priority="63" Name="Medium Shading 1 Accent 3" />
+<w:LsdException Locked="false" Priority="64" Name="Medium Shading 2 Accent 3" />
+<w:LsdException Locked="false" Priority="65" Name="Medium List 1 Accent 3" />
+<w:LsdException Locked="false" Priority="66" Name="Medium List 2 Accent 3" />
+<w:LsdException Locked="false" Priority="67" Name="Medium Grid 1 Accent 3" />
+<w:LsdException Locked="false" Priority="68" Name="Medium Grid 2 Accent 3" />
+<w:LsdException Locked="false" Priority="69" Name="Medium Grid 3 Accent 3" />
+<w:LsdException Locked="false" Priority="70" Name="Dark List Accent 3" />
+<w:LsdException Locked="false" Priority="71" Name="Colorful Shading Accent 3" />
+<w:LsdException Locked="false" Priority="72" Name="Colorful List Accent 3" />
+<w:LsdException Locked="false" Priority="73" Name="Colorful Grid Accent 3" />
+<w:LsdException Locked="false" Priority="60" Name="Light Shading Accent 4" />
+<w:LsdException Locked="false" Priority="61" Name="Light List Accent 4" />
+<w:LsdException Locked="false" Priority="62" Name="Light Grid Accent 4" />
+<w:LsdException Locked="false" Priority="63" Name="Medium Shading 1 Accent 4" />
+<w:LsdException Locked="false" Priority="64" Name="Medium Shading 2 Accent 4" />
+<w:LsdException Locked="false" Priority="65" Name="Medium List 1 Accent 4" />
+<w:LsdException Locked="false" Priority="66" Name="Medium List 2 Accent 4" />
+<w:LsdException Locked="false" Priority="67" Name="Medium Grid 1 Accent 4" />
+<w:LsdException Locked="false" Priority="68" Name="Medium Grid 2 Accent 4" />
+<w:LsdException Locked="false" Priority="69" Name="Medium Grid 3 Accent 4" />
+<w:LsdException Locked="false" Priority="70" Name="Dark List Accent 4" />
+<w:LsdException Locked="false" Priority="71" Name="Colorful Shading Accent 4" />
+<w:LsdException Locked="false" Priority="72" Name="Colorful List Accent 4" />
+<w:LsdException Locked="false" Priority="73" Name="Colorful Grid Accent 4" />
+<w:LsdException Locked="false" Priority="60" Name="Light Shading Accent 5" />
+<w:LsdException Locked="false" Priority="61" Name="Light List Accent 5" />
+<w:LsdException Locked="false" Priority="62" Name="Light Grid Accent 5" />
+<w:LsdException Locked="false" Priority="63" Name="Medium Shading 1 Accent 5" />
+<w:LsdException Locked="false" Priority="64" Name="Medium Shading 2 Accent 5" />
+<w:LsdException Locked="false" Priority="65" Name="Medium List 1 Accent 5" />
+<w:LsdException Locked="false" Priority="66" Name="Medium List 2 Accent 5" />
+<w:LsdException Locked="false" Priority="67" Name="Medium Grid 1 Accent 5" />
+<w:LsdException Locked="false" Priority="68" Name="Medium Grid 2 Accent 5" />
+<w:LsdException Locked="false" Priority="69" Name="Medium Grid 3 Accent 5" />
+<w:LsdException Locked="false" Priority="70" Name="Dark List Accent 5" />
+<w:LsdException Locked="false" Priority="71" Name="Colorful Shading Accent 5" />
+<w:LsdException Locked="false" Priority="72" Name="Colorful List Accent 5" />
+<w:LsdException Locked="false" Priority="73" Name="Colorful Grid Accent 5" />
+<w:LsdException Locked="false" Priority="60" Name="Light Shading Accent 6" />
+<w:LsdException Locked="false" Priority="61" Name="Light List Accent 6" />
+<w:LsdException Locked="false" Priority="62" Name="Light Grid Accent 6" />
+<w:LsdException Locked="false" Priority="63" Name="Medium Shading 1 Accent 6" />
+<w:LsdException Locked="false" Priority="64" Name="Medium Shading 2 Accent 6" />
+<w:LsdException Locked="false" Priority="65" Name="Medium List 1 Accent 6" />
+<w:LsdException Locked="false" Priority="66" Name="Medium List 2 Accent 6" />
+<w:LsdException Locked="false" Priority="67" Name="Medium Grid 1 Accent 6" />
+<w:LsdException Locked="false" Priority="68" Name="Medium Grid 2 Accent 6" />
+<w:LsdException Locked="false" Priority="69" Name="Medium Grid 3 Accent 6" />
+<w:LsdException Locked="false" Priority="70" Name="Dark List Accent 6" />
+<w:LsdException Locked="false" Priority="71" Name="Colorful Shading Accent 6" />
+<w:LsdException Locked="false" Priority="72" Name="Colorful List Accent 6" />
+<w:LsdException Locked="false" Priority="73" Name="Colorful Grid Accent 6" />
+<w:LsdException Locked="false" Priority="19" QFormat="true"
+Name="Subtle Emphasis" />
+<w:LsdException Locked="false" Priority="21" QFormat="true"
+Name="Intense Emphasis" />
+<w:LsdException Locked="false" Priority="31" QFormat="true"
+Name="Subtle Reference" />
+<w:LsdException Locked="false" Priority="32" QFormat="true"
+Name="Intense Reference" />
+<w:LsdException Locked="false" Priority="33" QFormat="true" Name="Book Title" />
+<w:LsdException Locked="false" Priority="37" SemiHidden="true"
+UnhideWhenUsed="true" Name="Bibliography" />
+<w:LsdException Locked="false" Priority="39" SemiHidden="true"
+UnhideWhenUsed="true" QFormat="true" Name="TOC Heading" />
+<w:LsdException Locked="false" Priority="41" Name="Plain Table 1" />
+<w:LsdException Locked="false" Priority="42" Name="Plain Table 2" />
+<w:LsdException Locked="false" Priority="43" Name="Plain Table 3" />
+<w:LsdException Locked="false" Priority="44" Name="Plain Table 4" />
+<w:LsdException Locked="false" Priority="45" Name="Plain Table 5" />
+<w:LsdException Locked="false" Priority="40" Name="Grid Table Light" />
+<w:LsdException Locked="false" Priority="46" Name="Grid Table 1 Light" />
+<w:LsdException Locked="false" Priority="47" Name="Grid Table 2" />
+<w:LsdException Locked="false" Priority="48" Name="Grid Table 3" />
+<w:LsdException Locked="false" Priority="49" Name="Grid Table 4" />
+<w:LsdException Locked="false" Priority="50" Name="Grid Table 5 Dark" />
+<w:LsdException Locked="false" Priority="51" Name="Grid Table 6 Colorful" />
+<w:LsdException Locked="false" Priority="52" Name="Grid Table 7 Colorful" />
+<w:LsdException Locked="false" Priority="46"
+Name="Grid Table 1 Light Accent 1" />
+<w:LsdException Locked="false" Priority="47" Name="Grid Table 2 Accent 1" />
+<w:LsdException Locked="false" Priority="48" Name="Grid Table 3 Accent 1" />
+<w:LsdException Locked="false" Priority="49" Name="Grid Table 4 Accent 1" />
+<w:LsdException Locked="false" Priority="50" Name="Grid Table 5 Dark Accent 1" />
+<w:LsdException Locked="false" Priority="51"
+Name="Grid Table 6 Colorful Accent 1" />
+<w:LsdException Locked="false" Priority="52"
+Name="Grid Table 7 Colorful Accent 1" />
+<w:LsdException Locked="false" Priority="46"
+Name="Grid Table 1 Light Accent 2" />
+<w:LsdException Locked="false" Priority="47" Name="Grid Table 2 Accent 2" />
+<w:LsdException Locked="false" Priority="48" Name="Grid Table 3 Accent 2" />
+<w:LsdException Locked="false" Priority="49" Name="Grid Table 4 Accent 2" />
+<w:LsdException Locked="false" Priority="50" Name="Grid Table 5 Dark Accent 2" />
+<w:LsdException Locked="false" Priority="51"
+Name="Grid Table 6 Colorful Accent 2" />
+<w:LsdException Locked="false" Priority="52"
+Name="Grid Table 7 Colorful Accent 2" />
+<w:LsdException Locked="false" Priority="46"
+Name="Grid Table 1 Light Accent 3" />
+<w:LsdException Locked="false" Priority="47" Name="Grid Table 2 Accent 3" />
+<w:LsdException Locked="false" Priority="48" Name="Grid Table 3 Accent 3" />
+<w:LsdException Locked="false" Priority="49" Name="Grid Table 4 Accent 3" />
+<w:LsdException Locked="false" Priority="50" Name="Grid Table 5 Dark Accent 3" />
+<w:LsdException Locked="false" Priority="51"
+Name="Grid Table 6 Colorful Accent 3" />
+<w:LsdException Locked="false" Priority="52"
+Name="Grid Table 7 Colorful Accent 3" />
+<w:LsdException Locked="false" Priority="46"
+Name="Grid Table 1 Light Accent 4" />
+<w:LsdException Locked="false" Priority="47" Name="Grid Table 2 Accent 4" />
+<w:LsdException Locked="false" Priority="48" Name="Grid Table 3 Accent 4" />
+<w:LsdException Locked="false" Priority="49" Name="Grid Table 4 Accent 4" />
+<w:LsdException Locked="false" Priority="50" Name="Grid Table 5 Dark Accent 4" />
+<w:LsdException Locked="false" Priority="51"
+Name="Grid Table 6 Colorful Accent 4" />
+<w:LsdException Locked="false" Priority="52"
+Name="Grid Table 7 Colorful Accent 4" />
+<w:LsdException Locked="false" Priority="46"
+Name="Grid Table 1 Light Accent 5" />
+<w:LsdException Locked="false" Priority="47" Name="Grid Table 2 Accent 5" />
+<w:LsdException Locked="false" Priority="48" Name="Grid Table 3 Accent 5" />
+<w:LsdException Locked="false" Priority="49" Name="Grid Table 4 Accent 5" />
+<w:LsdException Locked="false" Priority="50" Name="Grid Table 5 Dark Accent 5" />
+<w:LsdException Locked="false" Priority="51"
+Name="Grid Table 6 Colorful Accent 5" />
+<w:LsdException Locked="false" Priority="52"
+Name="Grid Table 7 Colorful Accent 5" />
+<w:LsdException Locked="false" Priority="46"
+Name="Grid Table 1 Light Accent 6" />
+<w:LsdException Locked="false" Priority="47" Name="Grid Table 2 Accent 6" />
+<w:LsdException Locked="false" Priority="48" Name="Grid Table 3 Accent 6" />
+<w:LsdException Locked="false" Priority="49" Name="Grid Table 4 Accent 6" />
+<w:LsdException Locked="false" Priority="50" Name="Grid Table 5 Dark Accent 6" />
+<w:LsdException Locked="false" Priority="51"
+Name="Grid Table 6 Colorful Accent 6" />
+<w:LsdException Locked="false" Priority="52"
+Name="Grid Table 7 Colorful Accent 6" />
+<w:LsdException Locked="false" Priority="46" Name="List Table 1 Light" />
+<w:LsdException Locked="false" Priority="47" Name="List Table 2" />
+<w:LsdException Locked="false" Priority="48" Name="List Table 3" />
+<w:LsdException Locked="false" Priority="49" Name="List Table 4" />
+<w:LsdException Locked="false" Priority="50" Name="List Table 5 Dark" />
+<w:LsdException Locked="false" Priority="51" Name="List Table 6 Colorful" />
+<w:LsdException Locked="false" Priority="52" Name="List Table 7 Colorful" />
+<w:LsdException Locked="false" Priority="46"
+Name="List Table 1 Light Accent 1" />
+<w:LsdException Locked="false" Priority="47" Name="List Table 2 Accent 1" />
+<w:LsdException Locked="false" Priority="48" Name="List Table 3 Accent 1" />
+<w:LsdException Locked="false" Priority="49" Name="List Table 4 Accent 1" />
+<w:LsdException Locked="false" Priority="50" Name="List Table 5 Dark Accent 1" />
+<w:LsdException Locked="false" Priority="51"
+Name="List Table 6 Colorful Accent 1" />
+<w:LsdException Locked="false" Priority="52"
+Name="List Table 7 Colorful Accent 1" />
+<w:LsdException Locked="false" Priority="46"
+Name="List Table 1 Light Accent 2" />
+<w:LsdException Locked="false" Priority="47" Name="List Table 2 Accent 2" />
+<w:LsdException Locked="false" Priority="48" Name="List Table 3 Accent 2" />
+<w:LsdException Locked="false" Priority="49" Name="List Table 4 Accent 2" />
+<w:LsdException Locked="false" Priority="50" Name="List Table 5 Dark Accent 2" />
+<w:LsdException Locked="false" Priority="51"
+Name="List Table 6 Colorful Accent 2" />
+<w:LsdException Locked="false" Priority="52"
+Name="List Table 7 Colorful Accent 2" />
+<w:LsdException Locked="false" Priority="46"
+Name="List Table 1 Light Accent 3" />
+<w:LsdException Locked="false" Priority="47" Name="List Table 2 Accent 3" />
+<w:LsdException Locked="false" Priority="48" Name="List Table 3 Accent 3" />
+<w:LsdException Locked="false" Priority="49" Name="List Table 4 Accent 3" />
+<w:LsdException Locked="false" Priority="50" Name="List Table 5 Dark Accent 3" />
+<w:LsdException Locked="false" Priority="51"
+Name="List Table 6 Colorful Accent 3" />
+<w:LsdException Locked="false" Priority="52"
+Name="List Table 7 Colorful Accent 3" />
+<w:LsdException Locked="false" Priority="46"
+Name="List Table 1 Light Accent 4" />
+<w:LsdException Locked="false" Priority="47" Name="List Table 2 Accent 4" />
+<w:LsdException Locked="false" Priority="48" Name="List Table 3 Accent 4" />
+<w:LsdException Locked="false" Priority="49" Name="List Table 4 Accent 4" />
+<w:LsdException Locked="false" Priority="50" Name="List Table 5 Dark Accent 4" />
+<w:LsdException Locked="false" Priority="51"
+Name="List Table 6 Colorful Accent 4" />
+<w:LsdException Locked="false" Priority="52"
+Name="List Table 7 Colorful Accent 4" />
+<w:LsdException Locked="false" Priority="46"
+Name="List Table 1 Light Accent 5" />
+<w:LsdException Locked="false" Priority="47" Name="List Table 2 Accent 5" />
+<w:LsdException Locked="false" Priority="48" Name="List Table 3 Accent 5" />
+<w:LsdException Locked="false" Priority="49" Name="List Table 4 Accent 5" />
+<w:LsdException Locked="false" Priority="50" Name="List Table 5 Dark Accent 5" />
+<w:LsdException Locked="false" Priority="51"
+Name="List Table 6 Colorful Accent 5" />
+<w:LsdException Locked="false" Priority="52"
+Name="List Table 7 Colorful Accent 5" />
+<w:LsdException Locked="false" Priority="46"
+Name="List Table 1 Light Accent 6" />
+<w:LsdException Locked="false" Priority="47" Name="List Table 2 Accent 6" />
+<w:LsdException Locked="false" Priority="48" Name="List Table 3 Accent 6" />
+<w:LsdException Locked="false" Priority="49" Name="List Table 4 Accent 6" />
+<w:LsdException Locked="false" Priority="50" Name="List Table 5 Dark Accent 6" />
+<w:LsdException Locked="false" Priority="51"
+Name="List Table 6 Colorful Accent 6" />
+<w:LsdException Locked="false" Priority="52"
+Name="List Table 7 Colorful Accent 6" />
+</w:LatentStyles>
+</xml><![endif]--><!--[if gte mso 10]>
+<style>
+/* Style Definitions */
+table.MsoNormalTable
+{mso-style-name:普通表格;
+mso-tstyle-rowband-size:0;
+mso-tstyle-colband-size:0;
+mso-style-noshow:yes;
+mso-style-priority:99;
+mso-style-parent:"";
+mso-padding-alt:0cm 5.4pt 0cm 5.4pt;
+mso-para-margin:0cm;
+mso-para-margin-bottom:.0001pt;
+mso-pagination:widow-orphan;
+font-size:10.0pt;
+font-family:"Times New Roman",serif;}
+</style>
+<![endif]--></p>
+
+
+		</td>
+	</tr>
+
+	<tr>
+
+		<td height="25" align="right" bgcolor=""  class="bgx">
+			<div align="right">
+			<!--考核方式：  -->考核方式：
+			</div>
+		</td>
+		<td align="left" bgcolor=""  class="bgx">
+
+			Assignments   (30%)
+Group project (60%)
+Attendance    (10 %) 
+
+		</td>
+
+
+		<td height="25" align="right" bgcolor=""  class="bgx">
+			<div align="right">
+			<!--教材及参考书：  -->教材及参考书：
+			</div>
+		</td>
+		<td align="left" bgcolor=""  class="bgx">
+
+			M. Tamer Ozsu and Patrick Valduriez. Principles of Distributed Database Systems (third Edition), Springer, 2011.
+		</td>
+	</tr>
+
+	<tr>
+
+		<td  height="25" align="right" bgcolor=""  class="bgx">
+			<div align="right">
+			<!--主教材：  -->主教材：
+			</div>
+		</td>
+	<td colspan="3"  class="bgx">
+
+
+   
+    
+<div id="ccc">  
+</div>
+
+		</td>
+	<tr>
+		<td height="25" align="right" bgcolor="" >
+			<div align="right">
+			参考书：
+			</div>
+		 </td>
+	<td colspan="3">
+
+			   
+
+              	<div id="ddd">  
+</div>
+
+		</td>
+		</tr>
+		<tr>
+
+		<td height="25" align="right" bgcolor="" >
+			<div align="right">
+			合开教师：
+			</div>
+		</td>
+		<td align="left" bgcolor="" >
+
+			
+
+		</td>
+
+
+		<td height="25" align="right" bgcolor="" >
+			<div align="right">
+			选课指导：
+			</div>
+		</td>
+		<td align="left" bgcolor="" >
+
+			
+		</td>
+	</tr>
+	<tr>
+
+		<td height="25" align="right" bgcolor="" >
+			<div align="right">
+			先修要求：
+			</div>
+		</td>
+		<td colspan="3" align="left" bgcolor="" >
+
+			 本科课程《数据库系统概论》或同等类型课程
+undergraduate course <Introduction to Database Systems> or equivalent course
+
+		</td>
+	</tr>
+		
+	 	
+	
+	
+	
+</table>
+      </td>
+    </tr>
+    </table>		    
+		<!--编辑部分表格 结束-->
+				    
+
+</form>
+
+
+
+  <div style="height:32px; line-height:32px; text-align:center; border-top: 2px solid; color:#242424; overflow:hidden; zoom:1; clear:both;">
+    <p style="height:20px; line-height:20px; margin-top:10px;">技术支持：清华大学信息化技术中心&nbsp;&nbsp;</p>
+  </div>

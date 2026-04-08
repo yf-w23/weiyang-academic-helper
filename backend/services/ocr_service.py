@@ -1,23 +1,14 @@
 """
-OCR 服务模块 - 优先使用 PaddleOCR 云端 API，失败时回退到本地 OCR
-
-使用方式：
-    # 自动模式（云端失败时自动回退到本地）
-    from backend.services.ocr_service import extract_pdf_to_markdown
-    text = extract_pdf_to_markdown("transcript.pdf", auto_fallback=True)
-    
-    # 强制使用本地 OCR
-    from backend.services.ocr_service_local import extract_pdf_to_markdown_local
-    text = extract_pdf_to_markdown_local("transcript.pdf")
+OCR 服务模块 - 优先使用 PaddleOCR 云端 API，失败时回退到本地 OCR 或简化OCR
 """
 
 import os
 import sys
+import traceback
 from pathlib import Path
 from typing import Optional
 
 from backend.config import settings
-from backend.services.ocr_service_local import OCRServiceLocal, OCRServiceError as LocalOCRError
 
 
 class OCRServiceError(Exception):
@@ -27,7 +18,7 @@ class OCRServiceError(Exception):
 
 class OCRService:
     """
-    OCR 服务类 - 优先云端，支持回退到本地
+    OCR 服务类 - 优先云端，支持回退到本地或简化OCR
     """
 
     def __init__(
@@ -37,45 +28,33 @@ class OCRService:
         timeout: Optional[int] = None,
         poppler_path: Optional[str] = None,
     ):
-        """
-        初始化 OCR 服务
-
-        Args:
-            api_url: PaddleOCR API URL（可选）
-            access_token: PaddleOCR Access Token（可选）
-            timeout: 请求超时时间（可选）
-            poppler_path: poppler 路径（本地 OCR 使用，可选）
-        """
         self.api_url = api_url or settings.PADDLEOCR_DOC_PARSING_API_URL
         self.access_token = access_token or settings.PADDLEOCR_ACCESS_TOKEN
         self.timeout = timeout or settings.PADDLEOCR_DOC_PARSING_TIMEOUT
         self.poppler_path = poppler_path or settings.POPPLER_PATH
         
-        # 本地 OCR 服务（延迟初始化）
-        self._local_service: Optional[OCRServiceLocal] = None
-
-    def _get_local_service(self) -> OCRServiceLocal:
-        """获取本地 OCR 服务实例（懒加载）"""
-        if self._local_service is None:
-            self._local_service = OCRServiceLocal(
-                poppler_path=self.poppler_path,
-                show_log=False
-            )
-        return self._local_service
+        self._local_service = None
+        self._simple_service = None
 
     def _try_cloud_ocr(self, pdf_path: str) -> str:
         """尝试使用云端 OCR"""
-        # 添加 paddleocr_doc_parsing 路径
         paddleocr_path = Path(__file__).parent.parent / "paddleocr_doc_parsing" / "scripts"
         if str(paddleocr_path) not in sys.path:
             sys.path.insert(0, str(paddleocr_path))
         
-        import lib
-        
-        # 设置环境变量
+        # 先设置环境变量（在导入 lib 之前设置，确保 lib 能读取到）
         os.environ["PADDLEOCR_DOC_PARSING_API_URL"] = self.api_url
         os.environ["PADDLEOCR_ACCESS_TOKEN"] = self.access_token
         os.environ["PADDLEOCR_DOC_PARSING_TIMEOUT"] = str(self.timeout)
+        
+        import lib
+        
+        # 强制重新加载配置（因为 lib 可能已经加载过了）
+        lib._env_loaded = False
+        lib._load_env()
+        
+        print(f"[OCR] Cloud API URL: {self.api_url}")
+        print(f"[OCR] Cloud API Token: {self.access_token[:10]}...")
         
         result = lib.parse_document(file_path=str(Path(pdf_path).absolute()))
         
@@ -86,6 +65,29 @@ class OCRService:
             )
         
         return result.get("text", "")
+
+    def _try_local_ocr(self, pdf_path: str) -> str:
+        """尝试使用本地 PaddleOCR"""
+        try:
+            from backend.services.ocr_service_local import OCRServiceLocal
+            if self._local_service is None:
+                self._local_service = OCRServiceLocal(
+                    poppler_path=self.poppler_path,
+                    show_log=False
+                )
+            return self._local_service.extract_pdf_to_markdown(pdf_path)
+        except ImportError:
+            raise OCRServiceError("本地 PaddleOCR 未安装")
+
+    def _try_simple_ocr(self, pdf_path: str) -> str:
+        """尝试使用简化版 OCR (PyMuPDF)"""
+        try:
+            from backend.services.ocr_simple import SimpleOCRService
+            if self._simple_service is None:
+                self._simple_service = SimpleOCRService()
+            return self._simple_service.extract_pdf_to_markdown(pdf_path)
+        except ImportError:
+            raise OCRServiceError("简化版 OCR (PyMuPDF) 未安装")
 
     def extract_pdf_to_markdown(
         self,
@@ -98,42 +100,66 @@ class OCRService:
 
         Args:
             pdf_path: PDF 文件路径
-            auto_fallback: 云端失败时是否自动回退到本地 OCR（默认 True）
+            auto_fallback: 失败时是否自动回退（默认 True）
             **options: 额外选项
 
         Returns:
             str: Markdown 格式的成绩单内容
-
-        Raises:
-            OCRServiceError: OCR 提取失败且不重试时
         """
-        # 首先尝试云端 OCR
-        cloud_error = None
+        print(f"[OCR] 开始处理文件: {pdf_path}")
+        
+        errors = []
+        
+        # 1. 尝试云端 OCR
         if self.access_token and self.api_url:
-            try:
-                print(f"[OCR] 尝试使用云端 API...")
-                return self._try_cloud_ocr(pdf_path)
-            except Exception as e:
-                cloud_error = str(e)
-                print(f"[OCR] 云端 API 失败: {cloud_error}")
+            # 检查API URL是否有效（不是示例URL）
+            is_valid_url = (
+                ("paddleocr.com" in self.api_url and "your-service" not in self.api_url) or
+                "aistudio-app.com" in self.api_url
+            )
+            if is_valid_url:
+                try:
+                    print(f"[OCR] 尝试使用云端 API: {self.api_url}")
+                    result = self._try_cloud_ocr(pdf_path)
+                    print(f"[OCR] 云端 API 成功")
+                    return result
+                except Exception as e:
+                    error_msg = f"云端 OCR: {str(e)}"
+                    print(f"[OCR] {error_msg}")
+                    errors.append(error_msg)
+            else:
+                print(f"[OCR] API URL 看起来是示例地址，跳过云端: {self.api_url}")
         else:
             print(f"[OCR] 云端 API 未配置，跳过")
         
-        # 云端失败，尝试本地 OCR
-        if auto_fallback:
-            try:
-                print(f"[OCR] 回退到本地 OCR...")
-                local_service = self._get_local_service()
-                return local_service.extract_pdf_to_markdown(pdf_path, **options)
-            except Exception as e:
-                fallback_error = str(e)
-                print(f"[OCR] 本地 OCR 也失败: {fallback_error}")
-                raise OCRServiceError(
-                    f"OCR 全部失败。云端: {cloud_error}; 本地: {fallback_error}"
-                )
+        if not auto_fallback:
+            raise OCRServiceError(f"云端 OCR 失败: {'; '.join(errors)}")
         
-        # 不重试，直接抛出云端错误
-        raise OCRServiceError(f"云端 OCR 失败: {cloud_error}")
+        # 2. 尝试本地 PaddleOCR
+        try:
+            print(f"[OCR] 回退到本地 PaddleOCR...")
+            result = self._try_local_ocr(pdf_path)
+            print(f"[OCR] 本地 PaddleOCR 成功")
+            return result
+        except Exception as e:
+            error_msg = f"本地 PaddleOCR: {str(e)}"
+            print(f"[OCR] {error_msg}")
+            errors.append(error_msg)
+        
+        # 3. 尝试简化版 OCR (PyMuPDF)
+        try:
+            print(f"[OCR] 回退到简化版 OCR (PyMuPDF)...")
+            result = self._try_simple_ocr(pdf_path)
+            print(f"[OCR] 简化版 OCR 成功")
+            return result
+        except Exception as e:
+            error_msg = f"简化版 OCR: {str(e)}"
+            print(f"[OCR] {error_msg}")
+            errors.append(error_msg)
+            traceback.print_exc()
+        
+        # 全部失败
+        raise OCRServiceError(f"所有 OCR 方式都失败: {'; '.join(errors)}")
 
 
 # 便捷函数
@@ -142,16 +168,6 @@ def extract_pdf_to_markdown(
     auto_fallback: bool = True,
     **options
 ) -> str:
-    """
-    便捷函数：提取 PDF 为 Markdown
-
-    Args:
-        pdf_path: PDF 文件路径
-        auto_fallback: 云端失败时是否自动回退到本地（默认 True）
-        **options: 额外选项
-
-    Returns:
-        str: Markdown 格式文本
-    """
+    """便捷函数：提取 PDF 为 Markdown"""
     service = OCRService()
     return service.extract_pdf_to_markdown(pdf_path, auto_fallback=auto_fallback, **options)

@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api.routes import advise, health
+from backend.api.routes import advise, health, chat
 from backend.config import settings
 
 
@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
     应用生命周期管理
     """
     # 启动时执行
-    print(f"🚀 Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    print(f"[START] Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     
     # TODO: 初始化数据库连接
     # TODO: 加载OCR模型
@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI):
     yield
     
     # 关闭时执行
-    print(f"👋 Shutting down {settings.APP_NAME}")
+    print(f"[STOP] Shutting down {settings.APP_NAME}")
     
     # TODO: 关闭数据库连接
     # TODO: 清理资源
@@ -69,6 +69,7 @@ def create_app() -> FastAPI:
     
     # API路由（带前缀）
     app.include_router(advise.router, prefix=settings.API_V1_PREFIX)
+    app.include_router(chat.router, prefix=settings.API_V1_PREFIX)
     
     return app
 

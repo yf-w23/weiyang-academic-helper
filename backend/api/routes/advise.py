@@ -8,9 +8,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
 from backend.agent.runner import run_gap_analysis
+from backend.agent.tools import extract_transcript_from_pdf
 from backend.api.deps import get_config
 from backend.config import Settings
 from backend.schemas.advise import GapAnalysisResponse
+from backend.services.transcript_parser import extract_student_info
 
 router = APIRouter(prefix="/advise", tags=["advise"])
 
@@ -20,22 +22,18 @@ router = APIRouter(prefix="/advise", tags=["advise"])
     response_model=GapAnalysisResponse,
     status_code=status.HTTP_200_OK,
     summary="培养方案缺口分析",
-    description="接收入学年份、班级和成绩单PDF，分析已修课程与培养方案的差距",
+    description="接收成绩单PDF，自动识别年级班级并分析已修课程与培养方案的差距",
 )
 async def gap_analysis(
-    enrollment_year: Annotated[int, Form(..., ge=2021, le=2025, description="入学年份")],
-    class_name: Annotated[str, Form(..., min_length=1, description="班级名称，如'未央-电11'")],
     transcript: Annotated[UploadFile, File(..., description="成绩单PDF文件")],
     config: Annotated[Settings, Depends(get_config)],
 ) -> GapAnalysisResponse:
     """
     培养方案缺口分析
     
-    - **enrollment_year**: 入学年份（2021-2025）
-    - **class_name**: 班级名称，如"未央-电11"
     - **transcript**: 成绩单PDF文件
     
-    返回：
+    系统自动从成绩单中识别入学年份和班级信息，返回：
     - 学分完成情况
     - 课组完成情况
     - 未修课程列表
@@ -58,11 +56,28 @@ async def gap_analysis(
             tmp.write(content)
             temp_file_path = tmp.name
         
+        # 先从成绩单中提取年级和班级信息
+        transcript_md = extract_transcript_from_pdf(temp_file_path)
+        info = extract_student_info(transcript_md)
+        year = info.get("year")
+        class_name = info.get("class_name")
+        
+        if not year or not class_name:
+            missing = []
+            if not year:
+                missing.append("入学年份")
+            if not class_name:
+                missing.append("班级")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"无法从成绩单中识别{'、'.join(missing)}信息，请确认上传的是有效的清华大学成绩单"
+            )
+        
         # 调用 LangGraph Agent 进行分析
         result = run_gap_analysis(
-            year=str(enrollment_year),
+            year=year,
             class_name=class_name,
-            pdf_path=temp_file_path
+            transcript_md=transcript_md
         )
         
         if not result.get("success"):
@@ -77,7 +92,7 @@ async def gap_analysis(
         
         return GapAnalysisResponse(
             success=True,
-            message=f"分析完成：{class_name}（{enrollment_year}级）",
+            message=f"分析完成：{class_name}（{year}级）",
             analysis_result=analysis_result,
         )
         
