@@ -18,8 +18,16 @@ from backend.agent.chat_prompts import (
 )
 from backend.agent.tools import extract_transcript_from_pdf, load_graduation_schema
 from backend.services.llm_service import LLMService
-from backend.services.transcript_parser import extract_student_info
+from backend.services.transcript_parser import extract_student_info, parse_transcript
 from backend.services.course_data_service import CourseDataService
+from backend.services.course_catalog_service import get_course_catalog_service
+from backend.services.general_edu_recommendation import CourseRatingService
+from backend.agent.general_edu_tools import (
+    get_general_education_gaps,
+    format_general_edu_summary,
+    recommend_general_education_courses,
+    query_general_edu_course_info,
+)
 
 
 class IntentType(str, Enum):
@@ -28,6 +36,7 @@ class IntentType(str, Enum):
     REQUEST_GAP_ANALYSIS = "request_gap_analysis"
     REQUEST_RECOMMENDATION = "request_recommendation"
     QUERY_COURSE = "query_course"
+    QUERY_GENERAL_EDU = "query_general_edu"  # 通识课查询/推荐
     GENERAL_CHAT = "general_chat"
     UNKNOWN = "unknown"
 
@@ -107,12 +116,21 @@ def intent_recognition_node(state: ChatState) -> Command:
         )
         
         # 解析JSON响应
-        json_str = response
-        if "```json" in response:
-            json_str = response.split("```json")[1].split("```")[0].strip()
-        elif "```" in response:
-            json_str = response.split("```")[1].split("```")[0].strip()
-        
+        if not response or not response.strip():
+            return Command(update={
+                "current_intent": IntentType.GENERAL_CHAT,
+            })
+
+        json_str = response.strip()
+        if "```json" in json_str:
+            json_str = json_str.split("```json")[1].split("```")[0].strip()
+        elif "```" in json_str:
+            json_str = json_str.split("```")[1].split("```")[0].strip()
+
+        # 尝试提取 JSON 对象（找第一个 { 到最后一个 }）
+        if '{' in json_str and '}' in json_str:
+            json_str = json_str[json_str.index('{'):json_str.rindex('}') + 1]
+
         result = json.loads(json_str)
         intent = result.get("intent", IntentType.UNKNOWN)
         entities = result.get("extracted_entities", {})
@@ -130,9 +148,9 @@ def intent_recognition_node(state: ChatState) -> Command:
         })
             
     except Exception as e:
+        # JSON 解析失败时不设 error，直接走 GENERAL_CHAT
         return Command(update={
             "current_intent": IntentType.GENERAL_CHAT,
-            "error": f"Intent recognition failed: {str(e)}"
         })
 
 
@@ -148,7 +166,8 @@ def handle_upload_node(state: ChatState) -> Command:
     
     try:
         transcript_md = extract_transcript_from_pdf(uploaded_file)
-        transcript_data = []
+        transcript_data = parse_transcript(transcript_md)
+        # 规则解析失败时，延迟到通识课查询时再用 LLM 回退（避免上传时额外等待）
         
         # 自动从成绩单中提取年级和班级
         info = extract_student_info(transcript_md)
@@ -259,9 +278,10 @@ def recommendation_node(state: ChatState) -> Command:
     try:
         # 从全校课程库中搜索相关课程作为推荐候选
         course_service = CourseDataService()
+        rating_service = CourseRatingService()
         interests = user_prefs.get("interests", [])
         search_keywords = interests if interests else ["通识", "专业"]
-        
+
         candidate_courses = []
         seen_names = set()
         for keyword in search_keywords[:3]:
@@ -271,15 +291,15 @@ def recommendation_node(state: ChatState) -> Command:
                 if name and name not in seen_names:
                     seen_names.add(name)
                     candidate_courses.append(course)
-        
+
         # 如果没有兴趣关键词，补充一些高评分课程
         if not candidate_courses:
             candidate_courses = course_service.get_high_rated_courses(min_rating=80)[:20]
-        
-        # 精简课程数据库信息用于 prompt
+
+        # 精简课程数据库信息用于 prompt，并附加评分数据
         course_db = []
         for c in candidate_courses[:30]:
-            course_db.append({
+            entry = {
                 "course_name": c.get("course_name"),
                 "course_code": c.get("course_code"),
                 "teacher_name": c.get("teacher_name"),
@@ -287,7 +307,19 @@ def recommendation_node(state: ChatState) -> Command:
                 "semester": c.get("semester"),
                 "rating": c.get("rating"),
                 "description": (c.get("description") or "")[:100],
-            })
+            }
+            # 附加评教数据
+            code = c.get("course_code", "")
+            if code:
+                rating = rating_service.get_rating(code)
+                if rating:
+                    entry["rating_detail"] = {
+                        "avg_score": round(rating.avg_score, 1),
+                        "grade": rating.grade,
+                        "teacher": rating.teacher_name,
+                        "total_students": rating.total_students,
+                    }
+            course_db.append(entry)
         
         llm = LLMService()
         prompt = get_course_recommendation_prompt(
@@ -321,21 +353,23 @@ def course_query_node(state: ChatState) -> Command:
     entities = context.get("extracted_entities", {})
     course_name = entities.get("course_name", "")
     teacher_name = entities.get("teacher_name", "")
-    
+
     if not course_name and not teacher_name:
         return Command(update={
             "response": "请告诉我您想查询哪门课程或哪位教师的信息（如'数据结构'、'邓俊辉'等）。"
         })
-    
+
     year = state.get("enrollment_year")
     class_name = state.get("class_name")
-    
+
     try:
-        # 先查询全校课程数据库
+        # 查询全校课程数据库 + 课程目录
         course_service = CourseDataService()
+        catalog_service = get_course_catalog_service()
+        rating_service = CourseRatingService()
         merged_results = []
         seen_codes = set()
-        
+
         if course_name:
             db_results = course_service.get_course_by_name(course_name, fuzzy=True)
             search_results = course_service.search_courses(course_name)
@@ -344,7 +378,7 @@ def course_query_node(state: ChatState) -> Command:
                 if code and code not in seen_codes:
                     seen_codes.add(code)
                     merged_results.append(course)
-        
+
         if teacher_name:
             teacher_results = course_service.search_courses(teacher_name)
             for course in teacher_results:
@@ -352,13 +386,25 @@ def course_query_node(state: ChatState) -> Command:
                 if code and code not in seen_codes:
                     seen_codes.add(code)
                     merged_results.append(course)
-        
-        # 精简数据库信息
+
+        # 也从课程目录中搜索（补充描述、考核方式等详情）
+        catalog_results = []
+        if course_name:
+            catalog_results = catalog_service.search_courses(course_name)
+        elif teacher_name:
+            catalog_results = catalog_service.search_courses(teacher_name)
+        catalog_by_code = {}
+        for cr in catalog_results:
+            if cr.code:
+                catalog_by_code[cr.code] = cr
+
+        # 精简数据库信息，并附加评分数据和课程目录详情
         course_db = []
         for c in merged_results[:15]:
-            course_db.append({
+            code = c.get("course_code", "")
+            entry = {
                 "course_name": c.get("course_name"),
-                "course_code": c.get("course_code"),
+                "course_code": code,
                 "teacher_name": c.get("teacher_name"),
                 "credits": c.get("credits"),
                 "semester": c.get("semester"),
@@ -366,7 +412,59 @@ def course_query_node(state: ChatState) -> Command:
                 "description": c.get("description"),
                 "assessment": c.get("assessment"),
                 "guidance": c.get("guidance"),
-            })
+            }
+            # 从课程目录补充详情（如果有）
+            if code in catalog_by_code:
+                cat = catalog_by_code[code]
+                if not entry.get("description") and cat.description:
+                    entry["description"] = cat.description
+                if not entry.get("assessment") and cat.assessment:
+                    entry["assessment"] = cat.assessment
+                if not entry.get("guidance") and cat.guidance:
+                    entry["guidance"] = cat.guidance
+                if not entry.get("teacher_name") and cat.teacher_name:
+                    entry["teacher_name"] = cat.teacher_name
+                if not entry.get("credits") and cat.credits:
+                    entry["credits"] = cat.credits
+            # 附加评教数据
+            if code:
+                rating = rating_service.get_rating(code)
+                if not rating:
+                    rating = rating_service.get_rating_by_name(c.get("course_name", ""))
+                if rating:
+                    entry["rating_detail"] = {
+                        "avg_score": rating.avg_score,
+                        "grade": rating.grade,
+                        "teacher": rating.teacher_name,
+                        "total_students": rating.total_students,
+                        "department": rating.department,
+                    }
+            course_db.append(entry)
+
+        # 如果课程数据库没找到结果，直接从目录返回
+        if not course_db and catalog_results:
+            for cr in catalog_results[:15]:
+                entry = {
+                    "course_name": cr.name,
+                    "course_code": cr.code,
+                    "teacher_name": cr.teacher_name,
+                    "credits": cr.credits,
+                    "description": cr.description,
+                    "assessment": cr.assessment,
+                    "guidance": cr.guidance,
+                }
+                rating = rating_service.get_rating(cr.code)
+                if not rating:
+                    rating = rating_service.get_rating_by_name(cr.name)
+                if rating:
+                    entry["rating_detail"] = {
+                        "avg_score": rating.avg_score,
+                        "grade": rating.grade,
+                        "teacher": rating.teacher_name,
+                        "total_students": rating.total_students,
+                        "department": rating.department,
+                    }
+                course_db.append(entry)
         
         # 如果有年级班级，加载培养方案作为补充
         schema_md = ""
@@ -400,6 +498,180 @@ def course_query_node(state: ChatState) -> Command:
     except Exception as e:
         return Command(update={
             "response": f'关于"{course_name or teacher_name}"：\n\n抱歉，查询课程信息时出错：{str(e)}。'
+        })
+
+
+def _extract_courses_with_llm(transcript_md: str) -> List[Dict[str, Any]]:
+    """使用 LLM 从成绩单 markdown 中提取结构化课程数据（正则解析失败时的回退方案）"""
+    prompt = f"""请从以下成绩单内容中提取所有已修课程信息，以 JSON 数组格式返回。
+每门课程包含以下字段：
+- code: 课程号（如无法识别则为空字符串）
+- name: 课程名称
+- credits: 学分（数字）
+- grade: 成绩（如 A、B+、90 等）
+- is_passed: 是否通过（boolean）
+
+只返回 JSON 数组，不要包含其他内容。如果课程不及格，is_passed 设为 false。
+
+成绩单内容：
+{transcript_md}
+"""
+    try:
+        llm = LLMService()
+        response = llm.chat_completion(
+            prompt=prompt,
+            temperature=0.1,
+            max_tokens=4000,
+        )
+        # 提取 JSON
+        text = response.strip()
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0].strip()
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0].strip()
+        if "[" in text and "]" in text:
+            text = text[text.index("["):text.rindex("]") + 1]
+        courses = json.loads(text)
+        # 验证并规范化
+        result = []
+        for c in courses:
+            if not isinstance(c, dict) or not c.get("name"):
+                continue
+            result.append({
+                "code": str(c.get("code", "")).strip(),
+                "name": str(c["name"]).strip(),
+                "credits": float(c.get("credits", 0)),
+                "grade": str(c.get("grade", "")).strip(),
+                "is_passed": bool(c.get("is_passed", True)),
+            })
+        return result
+    except Exception:
+        return []
+
+
+def _extract_target_group(message: str) -> Optional[str]:
+    """从用户消息中提取指定的课组"""
+    msg_lower = message.lower()
+    
+    # 艺术课组
+    if any(kw in msg_lower for kw in ["艺术课组", "艺术课", "艺术类的"]):
+        return "art"
+    # 科学课组
+    elif any(kw in msg_lower for kw in ["科学课组", "科学课", "科学类的"]):
+        return "science"
+    # 人文课组
+    elif any(kw in msg_lower for kw in ["人文课组", "人文课", "人文类的"]):
+        return "humanities"
+    # 社科课组
+    elif any(kw in msg_lower for kw in ["社科课组", "社科课", "社科类的", "社会科学"]):
+        return "social"
+    
+    return None
+
+
+def general_edu_node(state: ChatState) -> Command:
+    """通识选修课分析/推荐节点"""
+    current_message = get_last_user_message(state)
+    transcript_md = state.get("transcript_md")
+    transcript_data = state.get("transcript_data", [])
+    context = state.get("context", {})
+    entities = context.get("extracted_entities", {})
+    
+    # 检查是否有成绩单数据
+    if not transcript_md:
+        return Command(update={
+            "response": "请先上传成绩单，我才能分析您的通识选修课完成情况。"
+        })
+    
+    # 如果 transcript_data 为空，从 markdown 解析并持久化到 state
+    extra_update = {}
+    if not transcript_data:
+        transcript_data = parse_transcript(transcript_md)
+        # 规则解析失败时，回退到 LLM 提取
+        if not transcript_data:
+            transcript_data = _extract_courses_with_llm(transcript_md)
+        if transcript_data:
+            extra_update["transcript_data"] = transcript_data
+    
+    try:
+        # 判断用户意图是查询缺口还是请求推荐
+        msg_lower = current_message.lower()
+        
+        is_recommendation = any(kw in msg_lower for kw in [
+            "推荐", "选课", "选什么", "建议", "推荐课程"
+        ])
+        
+        is_gap_query = any(kw in msg_lower for kw in [
+            "差几学分", "缺几学分", "没修满", "完成情况", "进度如何",
+            "修了多少", "还差多少"
+        ])
+        
+        # 获取用户兴趣偏好和指定课组
+        interests = entities.get("interests", [])
+        target_group = _extract_target_group(current_message)
+        
+        if is_recommendation:
+            # 通识课推荐
+            result = recommend_general_education_courses(
+                transcript_data,
+                interests=interests,
+                target_group=target_group
+            )
+            
+            # 如果指定了课组但没有找到该课组的课程，给出提示
+            if target_group and not result["recommendations"]:
+                group_names = {
+                    "art": "艺术课组",
+                    "science": "科学课组", 
+                    "humanities": "人文课组",
+                    "social": "社科课组"
+                }
+                group_name = group_names.get(target_group, target_group)
+                response = f"抱歉，没有找到{group_name}的推荐课程。\n\n"
+                response += "该课组可能已完成，或者课程数据需要更新。\n"
+                response += "您可以查看您的通识课完成情况，或询问其他课组的推荐。"
+                return Command(update={**extra_update, "response": response})
+
+            return Command(update={
+                **extra_update,
+                "response": result["report"]
+            })
+
+        else:
+            # 默认：提供完成情况摘要和缺口分析
+            summary = format_general_edu_summary(transcript_data)
+            gaps = get_general_education_gaps(transcript_data)
+
+            response = f"{summary}\n\n{gaps}"
+
+            # 如果有未完成的课组，提供推荐
+            from backend.services.general_edu_service import get_general_edu_service
+            service = get_general_edu_service()
+            analysis = service.analyze_completion(transcript_data)
+            incomplete = service.get_incomplete_groups(analysis)
+
+            if incomplete and not is_gap_query:
+                # 自动推荐一些课程
+                result = recommend_general_education_courses(
+                    transcript_data,
+                    interests=interests,
+                    max_recommendations=5
+                )
+                if result["recommendations"]:
+                    response += "\n\n**为您推荐以下通识课**:\n"
+                    for rec in result["recommendations"][:3]:
+                        response += f"- {rec['course_name']} ({rec['group_name']}, {rec['credits']}学分) - {rec['reason']}\n"
+
+            return Command(update={
+                **extra_update,
+                "response": response
+            })
+
+    except Exception as e:
+        return Command(update={
+            **extra_update,
+            "error": f"General edu analysis failed: {str(e)}",
+            "response": f"分析通识选修课时出错：{str(e)}。请稍后重试。"
         })
 
 
@@ -477,6 +749,7 @@ def route_by_intent(state: ChatState) -> str:
         IntentType.REQUEST_GAP_ANALYSIS: "gap_analysis",
         IntentType.REQUEST_RECOMMENDATION: "recommendation",
         IntentType.QUERY_COURSE: "course_query",
+        IntentType.QUERY_GENERAL_EDU: "general_edu",
         IntentType.GENERAL_CHAT: "chat_response",
         IntentType.UNKNOWN: "chat_response",
     }
@@ -494,6 +767,7 @@ def build_chat_graph() -> StateGraph:
     builder.add_node("gap_analysis", gap_analysis_node)
     builder.add_node("recommendation", recommendation_node)
     builder.add_node("course_query", course_query_node)
+    builder.add_node("general_edu", general_edu_node)
     builder.add_node("chat_response", chat_response_node)
     builder.add_node("error_handler", error_handler_node)
     
@@ -508,6 +782,7 @@ def build_chat_graph() -> StateGraph:
             "gap_analysis": "gap_analysis",
             "recommendation": "recommendation",
             "course_query": "course_query",
+            "general_edu": "general_edu",
             "chat_response": "chat_response",
             "error_handler": "error_handler",
             END: END
@@ -518,6 +793,7 @@ def build_chat_graph() -> StateGraph:
     builder.add_edge("gap_analysis", END)
     builder.add_edge("recommendation", END)
     builder.add_edge("course_query", END)
+    builder.add_edge("general_edu", END)
     builder.add_edge("chat_response", END)
     builder.add_edge("error_handler", END)
     

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 
 export function ChatPage() {
   const [input, setInput] = useState('');
@@ -123,7 +124,7 @@ export function ChatPage() {
         {/* 底部留白 */}
         <div className="p-4 border-t border-gray-200">
           <p className="text-xs text-gray-400 text-center">
-            上传成绩单后自动识别年级班级
+            上传成绩单 · 通识课分析 · 选课推荐
           </p>
         </div>
       </div>
@@ -157,7 +158,8 @@ export function ChatPage() {
                 你好！我是你的学业规划助手
               </h2>
               <p className="text-gray-600 max-w-md mx-auto">
-                我可以帮你分析成绩单、检查培养方案完成情况、推荐课程等。
+                我可以帮你分析成绩单、检查培养方案缺口、分析通识课完成情况、
+                推荐高评分课程等。
                 <br />
                 请先上传成绩单，或向我提问。
               </p>
@@ -183,7 +185,7 @@ export function ChatPage() {
                   </div>
                 ) : (
                   <div className="markdown-content max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{message.content}</ReactMarkdown>
                   </div>
                 )}
               </div>
@@ -195,7 +197,7 @@ export function ChatPage() {
             <div className="flex justify-start">
               <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-white border border-gray-200">
                 <div className="markdown-content max-w-none">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingContent}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{streamingContent}</ReactMarkdown>
                 </div>
                 <span className="inline-block w-2 h-4 bg-blue-600 ml-1 animate-pulse" />
               </div>
@@ -263,7 +265,13 @@ export function ChatPage() {
 
           {/* 快捷操作 */}
           <div className="max-w-4xl mx-auto mt-3 flex gap-2 flex-wrap justify-center">
-            {['分析我的培养方案', '推荐下学期课程', '查看未修必修课'].map((text) => (
+            {[
+            '分析我的培养方案',
+            '推荐下学期课程',
+            '我通识课修满了吗',
+            '推荐一些给分好的通识课',
+            '查看未修必修课',
+          ].map((text) => (
               <button
                 key={text}
                 onClick={() => {

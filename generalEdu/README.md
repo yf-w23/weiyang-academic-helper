@@ -8,7 +8,7 @@
 
 ```
 generalEdu/
-├── science.md          # 科学课组课程列表（277门）
+├── science.md          # 科学课组课程列表（278门）
 ├── Humanities.md       # 人文课组课程列表（138门）
 ├── Social.md           # 社科课组课程列表（140门）
 ├── Art.md              # 艺术课组课程列表（202门）

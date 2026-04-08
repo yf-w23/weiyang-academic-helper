@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .prerequisite_graph import PrerequisiteGraph, load_prerequisite_graph
 from .course_data_service import CourseDataService
+from .general_edu_recommendation import CourseRatingService
 
 
 @dataclass
@@ -23,14 +24,16 @@ class CourseRecommendation:
     match_score: float  # 与用户偏好匹配度
     workload: str  # 工作量：轻/中/重
     rating: float  # 课程评分
+    description: str = ""  # 课程描述
 
 
 class RecommendationEngine:
     """选课推荐引擎"""
-    
+
     def __init__(self):
         self.graph = load_prerequisite_graph()
         self.course_data = CourseDataService()
+        self.rating_service = CourseRatingService()
         self.prereq_data = self._load_prerequisites()
         
     def _load_prerequisites(self) -> List[Dict]:
@@ -84,6 +87,11 @@ class RecommendationEngine:
             # 获取课程详细信息
             course_info = self.course_data.get_course_by_code(course["code"])
             
+            # 获取课程描述
+            description = ""
+            if course_info:
+                description = course_info.get("description", "")
+            
             rec = CourseRecommendation(
                 course_code=course["code"],
                 course_name=course["name"],
@@ -95,7 +103,8 @@ class RecommendationEngine:
                 is_required=course.get("is_required", False),
                 match_score=score["preference_match"],
                 workload=course_info.get("workload", "中") if course_info else "中",
-                rating=course_info.get("rating", 0) if course_info else 0
+                rating=course_info.get("rating", 0) if course_info else 0,
+                description=description
             )
             recommendations.append(rec)
         
@@ -196,12 +205,12 @@ class RecommendationEngine:
     ) -> Dict[str, float]:
         """
         计算课程优先级分数
-        
+
         权重：
-        - 是否必修：40分
-        - 阻塞系数：30分
+        - 是否必修：35分
+        - 阻塞系数：25分
         - 用户偏好匹配：20分
-        - 课程评分：10分
+        - 课程质量评分：20分（使用真实评教数据）
         """
         scores = {
             "required": 0,
@@ -210,40 +219,48 @@ class RecommendationEngine:
             "rating": 0,
             "total": 0
         }
-        
-        # 1. 必修权重（40分）
+
+        # 1. 必修权重（35分）
         if course.get("is_required", False):
-            scores["required"] = 40
-        
-        # 2. 阻塞系数权重（30分）
+            scores["required"] = 35
+
+        # 2. 阻塞系数权重（25分）
         blocking = course.get("blocking_score", 0)
         if blocking >= 10:
-            scores["blocking"] = 30
+            scores["blocking"] = 25
         elif blocking >= 5:
             scores["blocking"] = 20
         elif blocking >= 3:
             scores["blocking"] = 15
         elif blocking >= 1:
             scores["blocking"] = 10
-        
+
         # 3. 用户偏好匹配（20分）
         match_score = self._calculate_preference_match(course, user_preferences)
         scores["preference_match"] = match_score * 20
-        
-        # 4. 课程评分（10分）
-        course_info = self.course_data.get_course_by_code(course.get("code"))
-        if course_info and course_info.get("rating"):
-            rating = course_info.get("rating")
-            scores["rating"] = (rating / 5.0) * 10
-        
+
+        # 4. 课程质量评分（20分，使用真实评教数据）
+        code = course.get("code", "")
+        rating = self.rating_service.get_rating(code) if code else None
+        if not rating and code:
+            rating = self.rating_service.get_rating_by_name(course.get("name", ""))
+        if rating:
+            quality_score = rating.recommendation_score  # Already 0-100 scale
+            scores["rating"] = (quality_score / 100.0) * 20
+        else:
+            # 回退到课程数据库的评分
+            course_info = self.course_data.get_course_by_code(code)
+            if course_info and course_info.get("rating"):
+                scores["rating"] = (course_info.get("rating") / 5.0) * 10
+
         # 总分
         scores["total"] = (
-            scores["required"] + 
-            scores["blocking"] + 
-            scores["preference_match"] + 
+            scores["required"] +
+            scores["blocking"] +
+            scores["preference_match"] +
             scores["rating"]
         )
-        
+
         return scores
         
     def _calculate_preference_match(
@@ -264,9 +281,15 @@ class RecommendationEngine:
         course_info = self.course_data.get_course_by_code(course.get("code"))
         description = course_info.get("description", "") if course_info else ""
         
+
+        # 合并课程名称和描述作为匹配文本
+        match_text = course_name
+        if description:
+            match_text = f"{course_name} {description}"
+
         # 兴趣匹配
         for interest in interests:
-            if interest in course_name or interest in description:
+            if interest in match_text:
                 match_score += 0.5
         
         # 工作量匹配
@@ -280,19 +303,27 @@ class RecommendationEngine:
     def _generate_reason(self, course: Dict, score: Dict[str, float]) -> str:
         """生成推荐理由"""
         reasons = []
-        
+
         if course.get("is_required", False):
             reasons.append("必修课")
-        
+
         blocking = course.get("blocking_score", 0)
         if blocking >= 5:
             reasons.append(f"高阻塞系数（{blocking}）")
         elif blocking >= 1:
             reasons.append(f"阻塞系数{blocking}")
-        
+
         if score["preference_match"] > 10:
             reasons.append("符合个人兴趣")
-        
+
+        # 使用真实评分数据补充推荐理由
+        code = course.get("code", "")
+        rating = self.rating_service.get_rating(code) if code else None
+        if not rating and code:
+            rating = self.rating_service.get_rating_by_name(course.get("name", ""))
+        if rating:
+            reasons.append(f"课程评分{rating.avg_score:.0f}分({rating.grade}，{rating.teacher_name})")
+
         if reasons:
             return "；".join(reasons)
         return "推荐选修"

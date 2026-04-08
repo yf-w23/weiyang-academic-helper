@@ -67,3 +67,6 @@ frontend/react-app/*.local
 
 # TypeScript
 *.tsbuildinfo
+
+# Claude Code
+.claude/

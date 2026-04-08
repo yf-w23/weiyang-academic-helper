@@ -206,6 +206,7 @@ class ApiClient {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
+          timeout: 300000, // 5 minutes for OCR + LLM processing
         }
       );
       console.log('[API] Upload success:', response.data);

@@ -18,10 +18,12 @@ class CourseRating:
     course_name: str
     teacher_name: str
     department: str
-    avg_score: float  # 平均分（百分制）
-    grade: str  # 等级（A+, A, A-等）
+    avg_score: float  # 百分制
+    std_dev: float    # 标准差
+    grade: str        # 等级（A+, A, A-等）
     total_students: int
-    recommendation_score: float = 0.0  # 推荐度计算分数
+    semester: str     # e.g., "2025-2026秋季"
+    recommendation_score: float = 0.0
 
 
 @dataclass
@@ -42,18 +44,18 @@ class GeneralEduRecommendation:
 
 class CourseRatingService:
     """课程评分数据服务"""
-    
+
     def __init__(self):
         self.project_root = self._get_project_root()
         self.ratings_dir = self.project_root / "info_courses_stars"
-        self._ratings: Dict[str, CourseRating] = {}
+        self._ratings: Dict[str, List[CourseRating]] = {}
         self._load_ratings()
-    
+
     def _get_project_root(self) -> Path:
         """获取项目根目录"""
         current_file = Path(__file__).resolve()
         return current_file.parent.parent.parent
-    
+
     def _load_ratings(self):
         """加载课程评分数据"""
         # 支持多个学期的评分文件
@@ -61,22 +63,33 @@ class CourseRatingService:
             "2025-2026秋季学期课程推荐度.md",
             "2025-2026春季学期课程推荐度.md",
         ]
-        
+
         for filename in rating_files:
             file_path = self.ratings_dir / filename
             if file_path.exists():
-                self._parse_rating_file(file_path)
-    
-    def _parse_rating_file(self, file_path: Path):
+                self._parse_rating_file(file_path, filename)
+
+        # 计算所有评分的推荐度分数
+        for ratings_list in self._ratings.values():
+            for rating in ratings_list:
+                rating.recommendation_score = self._calculate_recommendation_score(rating)
+
+    def _parse_rating_file(self, file_path: Path, filename: str):
         """解析评分文件"""
+        # 从文件名提取学期信息，如 "2025-2026春季学期课程推荐度.md" -> "2025-2026春季"
+        semester = ""
+        match = re.match(r'(.+?)学期课程推荐度', filename)
+        if match:
+            semester = match.group(1)
+
         content = file_path.read_text(encoding='utf-8')
-        
+
         # 解析表格
         # 格式：| 开课院系 | 教师名 | 课程号 | 课程名 | 总人数 | 平均分 | 标准差 | 百分制 | 等级 |
         in_table = False
         for line in content.split('\n'):
             line = line.strip()
-            
+
             if line.startswith('|') and '开课院系' not in line and '---' not in line:
                 cells = [c.strip() for c in line.split('|')[1:-1]]
                 if len(cells) >= 9:
@@ -86,59 +99,95 @@ class CourseRatingService:
                         code = cells[2].replace("'", "").replace('"', '')
                         name = cells[3]
                         total = int(cells[4]) if cells[4].isdigit() else 0
+                        std_dev = float(cells[6]) if cells[6] else 0.0  # 标准差（列索引6）
                         avg_score = float(cells[7]) if cells[7] else 0.0  # 百分制
                         grade = cells[8]
-                        
-                        # 使用课程号作为主键，如果有重复取评分高的
+
+                        # 存储所有评分记录（按课程号分组，保留多个教师/学期）
                         key = code
-                        if key in self._ratings:
-                            if avg_score > self._ratings[key].avg_score:
-                                self._ratings[key] = CourseRating(
-                                    course_code=code,
-                                    course_name=name,
-                                    teacher_name=teacher,
-                                    department=department,
-                                    avg_score=avg_score,
-                                    grade=grade,
-                                    total_students=total
-                                )
-                        else:
-                            self._ratings[key] = CourseRating(
-                                course_code=code,
-                                course_name=name,
-                                teacher_name=teacher,
-                                department=department,
-                                avg_score=avg_score,
-                                grade=grade,
-                                total_students=total
-                            )
+                        rating_entry = CourseRating(
+                            course_code=code,
+                            course_name=name,
+                            teacher_name=teacher,
+                            department=department,
+                            avg_score=avg_score,
+                            std_dev=std_dev,
+                            grade=grade,
+                            total_students=total,
+                            semester=semester
+                        )
+                        if key not in self._ratings:
+                            self._ratings[key] = []
+                        self._ratings[key].append(rating_entry)
                     except (ValueError, IndexError):
                         continue
-    
+
+    def _calculate_recommendation_score(self, rating: CourseRating) -> float:
+        """
+        计算推荐度分数
+
+        Formula: base_score * quality_weight + bonus
+        - base_score: avg_score (百分制, 0-100)
+        - quality_weight: 0.7
+        - popularity_bonus: min(total_students / 50, 1.0) * 10 (max 10 points)
+        - consistency_bonus: if std_dev < 0.8, +5 points
+        """
+        base = rating.avg_score * 0.7
+        popularity_bonus = min(rating.total_students / 50, 1.0) * 10
+        consistency_bonus = 5.0 if rating.std_dev < 0.8 else 0.0
+        return base + popularity_bonus + consistency_bonus
+
     def get_rating(self, course_code: str) -> Optional[CourseRating]:
-        """获取课程评分"""
-        code = course_code.strip().replace("'", "").replace('"', '')
-        return self._ratings.get(code)
-    
+        """获取课程评分（返回最高评分的教师开课记录，向后兼容）"""
+        return self.get_best_rated_offering(course_code)
+
     def get_rating_by_name(self, course_name: str) -> Optional[CourseRating]:
-        """通过课程名获取评分（模糊匹配）"""
-        for rating in self._ratings.values():
-            if rating.course_name in course_name or course_name in rating.course_name:
-                return rating
-        return None
-    
+        """通过课程名获取评分（模糊匹配，返回最高评分的记录）"""
+        best_rating = None
+        for ratings_list in self._ratings.values():
+            for rating in ratings_list:
+                if rating.course_name in course_name or course_name in rating.course_name:
+                    if best_rating is None or rating.recommendation_score > best_rating.recommendation_score:
+                        best_rating = rating
+        return best_rating
+
     def get_all_ratings(self) -> List[CourseRating]:
         """获取所有评分数据"""
-        return list(self._ratings.values())
+        result = []
+        for ratings_list in self._ratings.values():
+            result.extend(ratings_list)
+        return result
+
+    def get_all_ratings_for_course(self, course_code: str) -> List[CourseRating]:
+        """获取某门课程所有教师/学期的评分记录"""
+        code = course_code.strip().replace("'", "").replace('"', '')
+        return self._ratings.get(code, [])
+
+    def get_best_rated_offering(self, course_code: str) -> Optional[CourseRating]:
+        """获取某门课程评分最高的教师开课记录"""
+        code = course_code.strip().replace("'", "").replace('"', '')
+        ratings_list = self._ratings.get(code)
+        if not ratings_list:
+            return None
+        return max(ratings_list, key=lambda r: r.recommendation_score)
+
+    def get_teacher_rating(self, course_code: str, teacher_name: str) -> Optional[CourseRating]:
+        """获取某门课程指定教师的评分记录"""
+        code = course_code.strip().replace("'", "").replace('"', '')
+        ratings_list = self._ratings.get(code, [])
+        for rating in ratings_list:
+            if rating.teacher_name == teacher_name:
+                return rating
+        return None
 
 
 class GeneralEduRecommendationEngine:
     """通识选修课推荐引擎"""
-    
+
     def __init__(self):
         self.general_edu_service = get_general_edu_service()
         self.rating_service = CourseRatingService()
-    
+
     def recommend(
         self,
         completed_courses: List[Dict[str, Any]],
@@ -147,25 +196,25 @@ class GeneralEduRecommendationEngine:
     ) -> List[GeneralEduRecommendation]:
         """
         生成通识选修课推荐
-        
+
         Args:
             completed_courses: 已修课程列表
             user_preferences: 用户偏好，如 {"interests": ["人工智能"], "avoid_teachers": ["某某"], "target_group": "art"}
             max_recommendations_per_group: 每个课组最多推荐几门课
-            
+
         Returns:
             推荐课程列表，按优先级排序
         """
         if user_preferences is None:
             user_preferences = {}
-        
+
         target_group = user_preferences.get("target_group")
-        
+
         # 分析完成情况
         analysis = self.general_edu_service.analyze_completion(completed_courses)
-        
+
         recommendations = []
-        
+
         # 如果指定了目标课组，只推荐该课组
         if target_group:
             target_group_obj = None
@@ -173,7 +222,7 @@ class GeneralEduRecommendationEngine:
                 if group.group_key == target_group or group.group_name == target_group:
                     target_group_obj = group
                     break
-            
+
             if target_group_obj:
                 group_recs = self._recommend_for_group(
                     target_group_obj,
@@ -184,15 +233,15 @@ class GeneralEduRecommendationEngine:
         else:
             # 优先推荐未完成课组的课程
             incomplete_groups = self.general_edu_service.get_incomplete_groups(analysis)
-            
+
             for group in incomplete_groups:
                 group_recs = self._recommend_for_group(
-                    group, 
+                    group,
                     user_preferences,
                     max_recommendations_per_group
                 )
                 recommendations.extend(group_recs)
-            
+
             # 如果还有余量，从已完成的课组中推荐高评分课程
             if len(recommendations) < 8:
                 complete_groups = [g for g in analysis.group_completions if g.is_complete]
@@ -207,12 +256,12 @@ class GeneralEduRecommendationEngine:
                         only_high_rated=True
                     )
                     recommendations.extend(group_recs)
-        
+
         # 按优先级排序
         recommendations.sort(key=lambda x: (x.priority, -x.rating))
-        
+
         return recommendations
-    
+
     def _recommend_for_group(
         self,
         group: GroupCompletion,
@@ -224,19 +273,19 @@ class GeneralEduRecommendationEngine:
         recommendations = []
         interests = user_preferences.get('interests', [])
         avoid_teachers = user_preferences.get('avoid_teachers', [])
-        
+
         # 候选课程：该课组未修的课程
         candidates = group.available_courses
-        
+
         # 计算每门课的推荐分数
         scored_candidates = []
         for course in candidates:
             # 获取评分信息
             rating = self.rating_service.get_rating(course.code)
-            
+
             if rating is None:
                 rating = self.rating_service.get_rating_by_name(course.name)
-            
+
             # 如果没有评分数据，给默认分数
             if rating is None:
                 score = 70.0  # 默认中等分数
@@ -248,11 +297,11 @@ class GeneralEduRecommendationEngine:
                 teacher = rating.teacher_name
                 department = rating.department
                 grade = rating.grade
-            
+
             # 跳过需要回避的老师
             if any(avoid in teacher for avoid in avoid_teachers):
                 continue
-            
+
             # 兴趣匹配加分
             interest_bonus = 0
             if interests:
@@ -260,9 +309,9 @@ class GeneralEduRecommendationEngine:
                     if interest in course.name or interest in course.name.lower():
                         interest_bonus = 10
                         break
-            
+
             final_score = score + interest_bonus
-            
+
             scored_candidates.append({
                 'course': course,
                 'rating': rating,
@@ -271,21 +320,21 @@ class GeneralEduRecommendationEngine:
                 'department': department,
                 'grade': grade
             })
-        
+
         # 按分数排序
         scored_candidates.sort(key=lambda x: x['score'], reverse=True)
-        
+
         # 筛选高评分课程（如果需要）
         if only_high_rated:
             scored_candidates = [c for c in scored_candidates if c['score'] >= 90]
-        
+
         # 生成推荐
         for i, candidate in enumerate(scored_candidates[:max_count]):
             course = candidate['course']
-            
+
             # 生成推荐理由
             reasons = []
-            
+
             # 课组完成情况说明
             if not group.is_complete:
                 # 课组未完成，需要补学分
@@ -293,7 +342,7 @@ class GeneralEduRecommendationEngine:
             else:
                 # 课组已完成，作为额外选修推荐
                 reasons.append(f"{group.group_name}已修满，可作为额外选修")
-            
+
             # 课程质量
             if candidate['score'] >= 95:
                 reasons.append(f"课程评分优秀({candidate['grade']})")
@@ -301,20 +350,20 @@ class GeneralEduRecommendationEngine:
                 reasons.append(f"课程评分良好({candidate['grade']})")
             elif candidate['score'] >= 85:
                 reasons.append(f"课程评分较好({candidate['grade']})")
-            
+
             # 选课热度
             if candidate['rating'] and candidate['rating'].total_students > 50:
                 reasons.append(f"选课人数多({candidate['rating'].total_students}人)")
-            
+
             # 兴趣匹配
             if interests:
                 for interest in interests:
                     if interest in course.name:
                         reasons.append(f"符合兴趣'{interest}'")
                         break
-            
+
             reason = "；".join(reasons) if reasons else "推荐选修"
-            
+
             rec = GeneralEduRecommendation(
                 course_code=course.code,
                 course_name=course.name,
@@ -329,9 +378,9 @@ class GeneralEduRecommendationEngine:
                 priority=1 if not group.is_complete else 3
             )
             recommendations.append(rec)
-        
+
         return recommendations
-    
+
     def generate_recommendation_report(
         self,
         recommendations: List[GeneralEduRecommendation]
@@ -339,25 +388,25 @@ class GeneralEduRecommendationEngine:
         """生成推荐报告"""
         if not recommendations:
             return "暂无通识课推荐。您可能已经完成了所有通识课要求！"
-        
+
         lines = ["# 通识选修课推荐", ""]
-        
+
         # 按课组分组
         groups = {}
         for rec in recommendations:
             if rec.group_name not in groups:
                 groups[rec.group_name] = []
             groups[rec.group_name].append(rec)
-        
+
         # 优先级排序
         priority_names = {1: "高优先级（强烈建议）", 2: "中优先级（建议选修）", 3: "低优先级（可选）"}
-        
+
         for priority in [1, 2, 3]:
             priority_recs = [r for r in recommendations if r.priority == priority]
             if priority_recs:
                 lines.append(f"## {priority_names.get(priority, '推荐课程')}")
                 lines.append("")
-                
+
                 for rec in priority_recs:
                     lines.append(f"### {rec.course_name}")
                     lines.append(f"- **课程号**: {rec.course_code}")
@@ -369,16 +418,16 @@ class GeneralEduRecommendationEngine:
                         lines.append(f"- **课程评分**: {rec.rating:.1f} ({rec.grade})")
                     lines.append(f"- **推荐理由**: {rec.reason}")
                     lines.append("")
-        
+
         # 选课建议
         total_credits = sum(r.credits for r in recommendations)
         lines.append("## 选课建议")
         lines.append("")
         lines.append(f"- 本次推荐共 {len(recommendations)} 门课程，合计 {total_credits} 学分")
-        lines.append("- 通识选修课要求：总学分≥11学分，每个课组至少2学分")
+        lines.append("- 通识选修课要求：总学分>=11学分，每个课组至少2学分")
         lines.append("- 建议优先选择高优先级课程，以满足课组最低学分要求")
         lines.append("- 课程评分数据来自往届学生评教，仅供参考")
-        
+
         return "\n".join(lines)
 
 
@@ -402,30 +451,30 @@ def recommend_general_edu_courses(
 ) -> Dict[str, Any]:
     """
     推荐通识选修课的便捷函数
-    
+
     Args:
         completed_courses: 已修课程列表
         user_preferences: 用户偏好
         target_group: 指定课组，如 "art", "science", "humanities", "social"
         max_recommendations: 最多推荐课程数
-        
+
     Returns:
         包含推荐结果的字典
     """
     if user_preferences is None:
         user_preferences = {}
-    
+
     # 如果指定了目标课组，添加到 preferences
     if target_group:
         user_preferences["target_group"] = target_group
-    
+
     engine = get_recommendation_engine()
     recommendations = engine.recommend(
         completed_courses,
         user_preferences,
         max_recommendations_per_group=3
     )
-    
+
     return {
         'recommendations': [
             {
@@ -451,15 +500,15 @@ def recommend_general_edu_courses(
 def analyze_general_edu_gaps(completed_courses: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     分析通识课缺口的便捷函数
-    
+
     Returns:
         缺口分析结果
     """
     service = get_general_edu_service()
     analysis = service.analyze_completion(completed_courses)
-    
+
     incomplete_groups = service.get_incomplete_groups(analysis)
-    
+
     return {
         'total_required': analysis.total_required,
         'total_earned': analysis.total_earned,

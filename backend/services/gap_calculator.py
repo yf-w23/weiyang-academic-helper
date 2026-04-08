@@ -6,6 +6,8 @@ from typing import List, Optional, Dict, Any, Set, Tuple
 from datetime import datetime
 from difflib import SequenceMatcher
 
+from .general_edu_service import get_general_edu_service, GeneralEduAnalysis
+
 
 @dataclass
 class CourseRequirement:
@@ -52,6 +54,9 @@ class GapAnalysisResult:
     
     recommended_semester_credits: float
     estimated_graduation_semester: Optional[str]
+    
+    # 通识选修课分析结果
+    general_edu_analysis: Optional[GeneralEduAnalysis] = None
 
 
 @dataclass
@@ -131,6 +136,12 @@ class GapCalculator:
             completed_courses, remaining_semesters
         )
         
+        # 通识选修课分析
+        general_edu_service = get_general_edu_service()
+        general_edu_analysis = general_edu_service.analyze_completion(
+            [c.to_dict() for c in completed_courses if c.is_passed]
+        )
+        
         return GapAnalysisResult(
             year=schema.year,
             class_name=schema.class_name,
@@ -145,6 +156,7 @@ class GapCalculator:
             practice_credits_earned=practice_credits,
             recommended_semester_credits=round(recommended_credits, 1),
             estimated_graduation_semester=estimated_graduation,
+            general_edu_analysis=general_edu_analysis,
         )
     
     def _match_course_to_groups(
@@ -485,4 +497,22 @@ def calculate_gaps(
         "practice_credits_earned": result.practice_credits_earned,
         "recommended_semester_credits": result.recommended_semester_credits,
         "estimated_graduation_semester": result.estimated_graduation_semester,
+        "general_edu_analysis": {
+            "total_required": result.general_edu_analysis.total_required,
+            "total_earned": result.general_edu_analysis.total_earned,
+            "total_missing": result.general_edu_analysis.total_missing,
+            "all_groups_complete": result.general_edu_analysis.all_groups_complete,
+            "groups": [
+                {
+                    "group_name": g.group_name,
+                    "group_key": g.group_key,
+                    "credits_required": g.credits_required,
+                    "credits_earned": g.credits_earned,
+                    "credits_missing": g.credits_missing,
+                    "is_complete": g.is_complete,
+                    "completed_courses": g.completed_courses,
+                }
+                for g in result.general_edu_analysis.group_completions
+            ]
+        } if result.general_edu_analysis else None,
     }
