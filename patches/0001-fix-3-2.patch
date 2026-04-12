@@ -1,0 +1,2481 @@
+From 1302b6d2f723853ccc0ccd93fe812df2a9df84f0 Mon Sep 17 00:00:00 2001
+From: yf-w23 <yf-w23@github.com>
+Date: Wed, 8 Apr 2026 16:33:01 +0800
+Subject: [PATCH] =?UTF-8?q?fix:=20=E4=BF=AE=E5=A4=8D=E7=A7=91=E5=AD=A6?=
+ =?UTF-8?q?=E8=AF=BE=E7=BB=84=E5=AD=A6=E5=88=86=E8=AE=A1=E7=AE=97=E9=94=99?=
+ =?UTF-8?q?=E8=AF=AF=EF=BC=88=E5=BA=94=E4=B8=BA3=E5=AD=A6=E5=88=86?=
+ =?UTF-8?q?=E8=80=8C=E9=9D=9E2=E5=AD=A6=E5=88=86=EF=BC=89?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- 修复 backend/services/general_edu_service.py 中科学课组 min_credits 从 2.0 改为 3.0
+- 更新 README.md 添加通识课组分析功能说明
+- 更新 prototype.md 添加通识课组分析详细设计文档
+- 新增通识课组相关服务、工具和课程数据文件
+---
+ README.md                                     |  27 +
+ backend/agent/general_edu_tools.py            | 268 ++++++++++
+ .../services/general_edu_recommendation.py    | 488 ++++++++++++++++++
+ backend/services/general_edu_service.py       | 380 ++++++++++++++
+ generalEdu/Art.md                             | 210 ++++++++
+ generalEdu/Humanities.md                      | 151 ++++++
+ generalEdu/README.md                          | 164 ++++++
+ generalEdu/Social.md                          | 148 ++++++
+ generalEdu/science.md                         | 290 +++++++++++
+ prototype.md                                  | 134 +++++
+ scripts/test_general_edu.py                   | 100 ++++
+ 11 files changed, 2360 insertions(+)
+ create mode 100644 backend/agent/general_edu_tools.py
+ create mode 100644 backend/services/general_edu_recommendation.py
+ create mode 100644 backend/services/general_edu_service.py
+ create mode 100644 generalEdu/Art.md
+ create mode 100644 generalEdu/Humanities.md
+ create mode 100644 generalEdu/README.md
+ create mode 100644 generalEdu/Social.md
+ create mode 100644 generalEdu/science.md
+ create mode 100644 scripts/test_general_edu.py
+
+diff --git a/README.md b/README.md
+index 063c5cb..dba9965 100644
+--- a/README.md
++++ b/README.md
+@@ -11,6 +11,7 @@
+ | 📄 **PDF 成绩单解析** | 使用 PaddleOCR 云端 API 精准解析 PDF 成绩单，支持 MD5 缓存加速 | ✅ 已实现 |
+ | 🎯 **自动信息识别** | 自动从成绩单中提取入学年份和班级信息（如 `未央-电31`） | ✅ 已实现 |
+ | 📊 **培养方案缺口分析** | 对比已修课程与培养方案，生成详细的缺口分析报告 | ✅ 已实现 |
++| 🎨 **通识课组分析** | 针对人文、社科、艺术、科学四大课组的完成情况进行专项分析 | ✅ 已实现 |
+ | 💬 **多轮对话交互** | DeepSeek 风格聊天界面，支持流式输出 | ✅ 已实现 |
+ | 🎓 **智能选课推荐** | 基于缺口分析 + 全校课程数据库，结合用户偏好推荐课程 | ✅ 已实现 |
+ | 🔍 **课程信息查询** | 查询课程详情、教师信息、开课学期、考核方式等 | ✅ 已实现 |
+@@ -274,6 +275,32 @@ transcript: <PDF 文件>
+ 返回分析结果
+ ```
+ 
++### 通识选修课组分析
++
++未央书院通识选修课包含四大课组，系统会针对每个课组进行专项分析：
++
++| 课组 | 最低学分要求 | 课程数量 | 说明 |
++|------|-------------|---------|------|
++| 🔬 **科学课组** | 3 学分 | 277+ 门 | 未央书院要求比其他课组多 1 学分 |
++| 📚 **人文课组** | 2 学分 | 138+ 门 | 含必修《科技与人文研讨课》（1学分） |
++| 🏛️ **社科课组** | 2 学分 | 140+ 门 | 社会科学类通识课程 |
++| 🎨 **艺术课组** | 2 学分 | 202+ 门 | 音乐、美术、戏剧等艺术类课程 |
++
++**总学分要求**: 至少 11 学分（四组最低要求 3+2+2+2=9 学分，需额外选修 2 学分）
++
++**分析逻辑**:
++```
++已修课程
++    ↓
++匹配四大课组课程库（课程号/课程名模糊匹配）
++    ↓
++计算各课组已修学分
++    ↓
++判断是否满足最低要求
++    ↓
++生成课组完成报告 + 选课建议
++```
++
+ ---
+ 
+ ## 配置说明
+diff --git a/backend/agent/general_edu_tools.py b/backend/agent/general_edu_tools.py
+new file mode 100644
+index 0000000..e4422e3
+--- /dev/null
++++ b/backend/agent/general_edu_tools.py
+@@ -0,0 +1,268 @@
++"""通识选修课相关工具
++
++为 LangGraph Agent 提供通识课分析、推荐等工具函数。
++"""
++
++from typing import List, Dict, Optional, Any
++
++from backend.services.general_edu_service import (
++    get_general_edu_service,
++    analyze_general_edu_completion,
++    generate_general_edu_report,
++)
++from backend.services.general_edu_recommendation import (
++    get_recommendation_engine,
++    recommend_general_edu_courses,
++    analyze_general_edu_gaps,
++)
++
++
++def analyze_general_education_courses(
++    completed_courses: List[Dict[str, Any]]
++) -> Dict[str, Any]:
++    """
++    分析学生通识选修课完成情况
++    
++    Args:
++        completed_courses: 已修课程列表，每项包含:
++            - code: 课程号
++            - name: 课程名
++            - credits: 学分
++            - grade: 成绩
++            - is_passed: 是否通过
++    
++    Returns:
++        通识课分析结果，包含:
++        - total_required: 总学分要求(11学分)
++        - total_earned: 已修学分
++        - total_missing: 剩余学分
++        - all_groups_complete: 是否所有课组都满足最低要求
++        - groups: 各课组完成情况详情
++    """
++    return analyze_general_edu_completion(completed_courses)
++
++
++def get_general_education_gaps(
++    completed_courses: List[Dict[str, Any]]
++) -> str:
++    """
++    获取通识选修课缺口描述（自然语言）
++    
++    适用于回答"我哪个课组没修满、差几学分"等问题
++    
++    Args:
++        completed_courses: 已修课程列表
++        
++    Returns:
++        自然语言描述的缺口分析
++    """
++    service = get_general_edu_service()
++    analysis = service.analyze_completion(completed_courses)
++    
++    lines = []
++    
++    # 总体情况
++    lines.append(f"通识选修课总要求: {analysis.total_required} 学分")
++    lines.append(f"您已修: {analysis.total_earned} 学分，还差: {analysis.total_missing} 学分")
++    lines.append("")
++    
++    # 各课组情况
++    incomplete_groups = []
++    for group in analysis.group_completions:
++        if group.is_complete:
++            lines.append(f"✅ {group.group_name}: 已完成 ({group.credits_earned}/{group.credits_required} 学分)")
++        else:
++            lines.append(f"❌ {group.group_name}: 未完成 ({group.credits_earned}/{group.credits_required} 学分，还差 {group.credits_missing} 学分)")
++            incomplete_groups.append(group)
++    
++    lines.append("")
++    
++    # 具体建议
++    if incomplete_groups:
++        lines.append("**建议优先完成以下课组**:")
++        for group in incomplete_groups:
++            lines.append(f"- {group.group_name}: 还需修读 {group.credits_missing} 学分")
++            if group.available_courses:
++                # 推荐几门该课组的课程
++                sample_courses = group.available_courses[:3]
++                course_names = [f"{c.name}({c.credits}学分)" for c in sample_courses]
++                lines.append(f"  可选课程如: {', '.join(course_names)} 等")
++    else:
++        lines.append("🎉 恭喜！您已完成所有通识课组的最低学分要求。")
++        if analysis.total_missing > 0:
++            lines.append(f"您还需要修读 {analysis.total_missing} 学分即可满足通识选修课总学分要求。")
++    
++    return "\n".join(lines)
++
++
++def recommend_general_education_courses(
++    completed_courses: List[Dict[str, Any]],
++    interests: Optional[List[str]] = None,
++    target_group: Optional[str] = None,
++    max_recommendations: int = 8
++) -> Dict[str, Any]:
++    """
++    推荐通识选修课
++    
++    基于缺口分析、课程评分和用户偏好推荐合适的通识课
++    
++    Args:
++        completed_courses: 已修课程列表
++        interests: 用户兴趣标签，如 ["人工智能", "历史", "艺术"]
++        target_group: 指定课组，如 "art", "science", "humanities", "social"，如果指定则只推荐该课组
++        max_recommendations: 最多推荐课程数
++        
++    Returns:
++        推荐结果，包含推荐列表和报告
++    """
++    preferences = {"interests": interests or []}
++    return recommend_general_edu_courses(
++        completed_courses,
++        preferences,
++        target_group=target_group,
++        max_recommendations=max_recommendations
++    )
++
++
++def get_general_education_report(
++    completed_courses: List[Dict[str, Any]]
++) -> str:
++    """
++    获取完整的通识选修课分析报告
++    
++    Args:
++        completed_courses: 已修课程列表
++        
++    Returns:
++        Markdown 格式的分析报告
++    """
++    return generate_general_edu_report(completed_courses)
++
++
++def query_general_edu_course_info(
++    course_name: Optional[str] = None,
++    course_code: Optional[str] = None,
++    group: Optional[str] = None
++) -> List[Dict[str, Any]]:
++    """
++    查询通识选修课信息
++    
++    Args:
++        course_name: 课程名（支持模糊匹配）
++        course_code: 课程号
++        group: 课组名称，可选 'science', 'humanities', 'social', 'art'
++        
++    Returns:
++        匹配的课程列表
++    """
++    service = get_general_edu_service()
++    results = []
++    
++    if course_code:
++        course = service.find_course_by_code(course_code)
++        if course:
++            results.append({
++                'code': course.code,
++                'name': course.name,
++                'credits': course.credits,
++                'group': course.group,
++                'group_name': service.GROUP_CONFIG.get(course.group, {}).get('name', course.group)
++            })
++    
++    elif course_name:
++        course = service.find_course_by_name(course_name)
++        if course:
++            results.append({
++                'code': course.code,
++                'name': course.name,
++                'credits': course.credits,
++                'group': course.group,
++                'group_name': service.GROUP_CONFIG.get(course.group, {}).get('name', course.group)
++            })
++    
++    elif group:
++        courses = service.get_group_courses(group)
++        for course in courses:
++            results.append({
++                'code': course.code,
++                'name': course.name,
++                'credits': course.credits,
++                'group': course.group,
++                'group_name': service.GROUP_CONFIG.get(course.group, {}).get('name', course.group)
++            })
++    
++    return results
++
++
++def get_incomplete_general_edu_groups(
++    completed_courses: List[Dict[str, Any]]
++) -> List[Dict[str, Any]]:
++    """
++    获取未完成的通识课课组列表
++    
++    Args:
++        completed_courses: 已修课程列表
++        
++    Returns:
++        未完成课组列表，包含所需学分信息
++    """
++    service = get_general_edu_service()
++    analysis = service.analyze_completion(completed_courses)
++    incomplete = service.get_incomplete_groups(analysis)
++    
++    return [
++        {
++            'group_name': g.group_name,
++            'group_key': g.group_key,
++            'credits_required': g.credits_required,
++            'credits_earned': g.credits_earned,
++            'credits_missing': g.credits_missing,
++            'available_courses': [
++                {'code': c.code, 'name': c.name, 'credits': c.credits}
++                for c in g.available_courses[:10]  # 返回前10门可选课程
++            ]
++        }
++        for g in incomplete
++    ]
++
++
++def format_general_edu_summary(
++    completed_courses: List[Dict[str, Any]]
++) -> str:
++    """
++    格式化通识课完成情况摘要（用于对话回复）
++    
++    Args:
++        completed_courses: 已修课程列表
++        
++    Returns:
++        简洁的摘要文本
++    """
++    service = get_general_edu_service()
++    analysis = service.analyze_completion(completed_courses)
++    
++    lines = ["**通识选修课完成情况**", ""]
++    
++    # 总体进度
++    progress_pct = (analysis.total_earned / analysis.total_required * 100) if analysis.total_required > 0 else 0
++    lines.append(f"总体进度: {analysis.total_earned}/{analysis.total_required} 学分 ({progress_pct:.1f}%)")
++    lines.append("")
++    
++    # 各课组状态
++    for group in analysis.group_completions:
++        icon = "✅" if group.is_complete else "⚠️"
++        lines.append(f"{icon} {group.group_name}: {group.credits_earned:.0f}/{group.credits_required:.0f} 学分")
++    
++    lines.append("")
++    
++    # 总结
++    if analysis.all_groups_complete:
++        if analysis.total_missing <= 0:
++            lines.append("🎉 恭喜！您已完成所有通识选修课要求！")
++        else:
++            lines.append(f"您已完成各课组最低要求，还需修读 {analysis.total_missing:.0f} 学分以满足总学分要求。")
++    else:
++        incomplete = [g for g in analysis.group_completions if not g.is_complete]
++        lines.append(f"您有 {len(incomplete)} 个课组未完成最低学分要求，建议优先补足。")
++    
++    return "\n".join(lines)
+diff --git a/backend/services/general_edu_recommendation.py b/backend/services/general_edu_recommendation.py
+new file mode 100644
+index 0000000..41d5ace
+--- /dev/null
++++ b/backend/services/general_edu_recommendation.py
+@@ -0,0 +1,488 @@
++"""通识选修课推荐服务
++
++结合课组要求、课程评分和学生偏好，推荐合适的通识选修课。
++"""
++
++import re
++from dataclasses import dataclass
++from typing import List, Dict, Optional, Any
++from pathlib import Path
++
++from .general_edu_service import get_general_edu_service, GeneralEduAnalysis, GroupCompletion
++
++
++@dataclass
++class CourseRating:
++    """课程评分数据"""
++    course_code: str
++    course_name: str
++    teacher_name: str
++    department: str
++    avg_score: float  # 平均分（百分制）
++    grade: str  # 等级（A+, A, A-等）
++    total_students: int
++    recommendation_score: float = 0.0  # 推荐度计算分数
++
++
++@dataclass
++class GeneralEduRecommendation:
++    """通识课推荐项"""
++    course_code: str
++    course_name: str
++    credits: float
++    group_name: str  # 所属课组
++    group_key: str
++    teacher_name: str
++    department: str
++    rating: float  # 课程评分
++    grade: str
++    reason: str  # 推荐理由
++    priority: int  # 优先级（1-5，1最高）
++
++
++class CourseRatingService:
++    """课程评分数据服务"""
++    
++    def __init__(self):
++        self.project_root = self._get_project_root()
++        self.ratings_dir = self.project_root / "info_courses_stars"
++        self._ratings: Dict[str, CourseRating] = {}
++        self._load_ratings()
++    
++    def _get_project_root(self) -> Path:
++        """获取项目根目录"""
++        current_file = Path(__file__).resolve()
++        return current_file.parent.parent.parent
++    
++    def _load_ratings(self):
++        """加载课程评分数据"""
++        # 支持多个学期的评分文件
++        rating_files = [
++            "2025-2026秋季学期课程推荐度.md",
++            "2025-2026春季学期课程推荐度.md",
++        ]
++        
++        for filename in rating_files:
++            file_path = self.ratings_dir / filename
++            if file_path.exists():
++                self._parse_rating_file(file_path)
++    
++    def _parse_rating_file(self, file_path: Path):
++        """解析评分文件"""
++        content = file_path.read_text(encoding='utf-8')
++        
++        # 解析表格
++        # 格式：| 开课院系 | 教师名 | 课程号 | 课程名 | 总人数 | 平均分 | 标准差 | 百分制 | 等级 |
++        in_table = False
++        for line in content.split('\n'):
++            line = line.strip()
++            
++            if line.startswith('|') and '开课院系' not in line and '---' not in line:
++                cells = [c.strip() for c in line.split('|')[1:-1]]
++                if len(cells) >= 9:
++                    try:
++                        department = cells[0]
++                        teacher = cells[1]
++                        code = cells[2].replace("'", "").replace('"', '')
++                        name = cells[3]
++                        total = int(cells[4]) if cells[4].isdigit() else 0
++                        avg_score = float(cells[7]) if cells[7] else 0.0  # 百分制
++                        grade = cells[8]
++                        
++                        # 使用课程号作为主键，如果有重复取评分高的
++                        key = code
++                        if key in self._ratings:
++                            if avg_score > self._ratings[key].avg_score:
++                                self._ratings[key] = CourseRating(
++                                    course_code=code,
++                                    course_name=name,
++                                    teacher_name=teacher,
++                                    department=department,
++                                    avg_score=avg_score,
++                                    grade=grade,
++                                    total_students=total
++                                )
++                        else:
++                            self._ratings[key] = CourseRating(
++                                course_code=code,
++                                course_name=name,
++                                teacher_name=teacher,
++                                department=department,
++                                avg_score=avg_score,
++                                grade=grade,
++                                total_students=total
++                            )
++                    except (ValueError, IndexError):
++                        continue
++    
++    def get_rating(self, course_code: str) -> Optional[CourseRating]:
++        """获取课程评分"""
++        code = course_code.strip().replace("'", "").replace('"', '')
++        return self._ratings.get(code)
++    
++    def get_rating_by_name(self, course_name: str) -> Optional[CourseRating]:
++        """通过课程名获取评分（模糊匹配）"""
++        for rating in self._ratings.values():
++            if rating.course_name in course_name or course_name in rating.course_name:
++                return rating
++        return None
++    
++    def get_all_ratings(self) -> List[CourseRating]:
++        """获取所有评分数据"""
++        return list(self._ratings.values())
++
++
++class GeneralEduRecommendationEngine:
++    """通识选修课推荐引擎"""
++    
++    def __init__(self):
++        self.general_edu_service = get_general_edu_service()
++        self.rating_service = CourseRatingService()
++    
++    def recommend(
++        self,
++        completed_courses: List[Dict[str, Any]],
++        user_preferences: Optional[Dict] = None,
++        max_recommendations_per_group: int = 3
++    ) -> List[GeneralEduRecommendation]:
++        """
++        生成通识选修课推荐
++        
++        Args:
++            completed_courses: 已修课程列表
++            user_preferences: 用户偏好，如 {"interests": ["人工智能"], "avoid_teachers": ["某某"], "target_group": "art"}
++            max_recommendations_per_group: 每个课组最多推荐几门课
++            
++        Returns:
++            推荐课程列表，按优先级排序
++        """
++        if user_preferences is None:
++            user_preferences = {}
++        
++        target_group = user_preferences.get("target_group")
++        
++        # 分析完成情况
++        analysis = self.general_edu_service.analyze_completion(completed_courses)
++        
++        recommendations = []
++        
++        # 如果指定了目标课组，只推荐该课组
++        if target_group:
++            target_group_obj = None
++            for group in analysis.group_completions:
++                if group.group_key == target_group or group.group_name == target_group:
++                    target_group_obj = group
++                    break
++            
++            if target_group_obj:
++                group_recs = self._recommend_for_group(
++                    target_group_obj,
++                    user_preferences,
++                    max_recommendations_per_group * 2  # 给目标课组更多名额
++                )
++                recommendations.extend(group_recs)
++        else:
++            # 优先推荐未完成课组的课程
++            incomplete_groups = self.general_edu_service.get_incomplete_groups(analysis)
++            
++            for group in incomplete_groups:
++                group_recs = self._recommend_for_group(
++                    group, 
++                    user_preferences,
++                    max_recommendations_per_group
++                )
++                recommendations.extend(group_recs)
++            
++            # 如果还有余量，从已完成的课组中推荐高评分课程
++            if len(recommendations) < 8:
++                complete_groups = [g for g in analysis.group_completions if g.is_complete]
++                for group in complete_groups:
++                    remaining_slots = 8 - len(recommendations)
++                    if remaining_slots <= 0:
++                        break
++                    group_recs = self._recommend_for_group(
++                        group,
++                        user_preferences,
++                        min(2, remaining_slots),
++                        only_high_rated=True
++                    )
++                    recommendations.extend(group_recs)
++        
++        # 按优先级排序
++        recommendations.sort(key=lambda x: (x.priority, -x.rating))
++        
++        return recommendations
++    
++    def _recommend_for_group(
++        self,
++        group: GroupCompletion,
++        user_preferences: Dict,
++        max_count: int,
++        only_high_rated: bool = False
++    ) -> List[GeneralEduRecommendation]:
++        """为指定课组生成推荐"""
++        recommendations = []
++        interests = user_preferences.get('interests', [])
++        avoid_teachers = user_preferences.get('avoid_teachers', [])
++        
++        # 候选课程：该课组未修的课程
++        candidates = group.available_courses
++        
++        # 计算每门课的推荐分数
++        scored_candidates = []
++        for course in candidates:
++            # 获取评分信息
++            rating = self.rating_service.get_rating(course.code)
++            
++            if rating is None:
++                rating = self.rating_service.get_rating_by_name(course.name)
++            
++            # 如果没有评分数据，给默认分数
++            if rating is None:
++                score = 70.0  # 默认中等分数
++                teacher = "未知"
++                department = "未知"
++                grade = "未知"
++            else:
++                score = rating.avg_score
++                teacher = rating.teacher_name
++                department = rating.department
++                grade = rating.grade
++            
++            # 跳过需要回避的老师
++            if any(avoid in teacher for avoid in avoid_teachers):
++                continue
++            
++            # 兴趣匹配加分
++            interest_bonus = 0
++            if interests:
++                for interest in interests:
++                    if interest in course.name or interest in course.name.lower():
++                        interest_bonus = 10
++                        break
++            
++            final_score = score + interest_bonus
++            
++            scored_candidates.append({
++                'course': course,
++                'rating': rating,
++                'score': final_score,
++                'teacher': teacher,
++                'department': department,
++                'grade': grade
++            })
++        
++        # 按分数排序
++        scored_candidates.sort(key=lambda x: x['score'], reverse=True)
++        
++        # 筛选高评分课程（如果需要）
++        if only_high_rated:
++            scored_candidates = [c for c in scored_candidates if c['score'] >= 90]
++        
++        # 生成推荐
++        for i, candidate in enumerate(scored_candidates[:max_count]):
++            course = candidate['course']
++            
++            # 生成推荐理由
++            reasons = []
++            
++            # 课组完成情况说明
++            if not group.is_complete:
++                # 课组未完成，需要补学分
++                reasons.append(f"{group.group_name}还需{group.credits_missing}学分")
++            else:
++                # 课组已完成，作为额外选修推荐
++                reasons.append(f"{group.group_name}已修满，可作为额外选修")
++            
++            # 课程质量
++            if candidate['score'] >= 95:
++                reasons.append(f"课程评分优秀({candidate['grade']})")
++            elif candidate['score'] >= 90:
++                reasons.append(f"课程评分良好({candidate['grade']})")
++            elif candidate['score'] >= 85:
++                reasons.append(f"课程评分较好({candidate['grade']})")
++            
++            # 选课热度
++            if candidate['rating'] and candidate['rating'].total_students > 50:
++                reasons.append(f"选课人数多({candidate['rating'].total_students}人)")
++            
++            # 兴趣匹配
++            if interests:
++                for interest in interests:
++                    if interest in course.name:
++                        reasons.append(f"符合兴趣'{interest}'")
++                        break
++            
++            reason = "；".join(reasons) if reasons else "推荐选修"
++            
++            rec = GeneralEduRecommendation(
++                course_code=course.code,
++                course_name=course.name,
++                credits=course.credits,
++                group_name=group.group_name,
++                group_key=group.group_key,
++                teacher_name=candidate['teacher'],
++                department=candidate['department'],
++                rating=candidate['score'],
++                grade=candidate['grade'],
++                reason=reason,
++                priority=1 if not group.is_complete else 3
++            )
++            recommendations.append(rec)
++        
++        return recommendations
++    
++    def generate_recommendation_report(
++        self,
++        recommendations: List[GeneralEduRecommendation]
++    ) -> str:
++        """生成推荐报告"""
++        if not recommendations:
++            return "暂无通识课推荐。您可能已经完成了所有通识课要求！"
++        
++        lines = ["# 通识选修课推荐", ""]
++        
++        # 按课组分组
++        groups = {}
++        for rec in recommendations:
++            if rec.group_name not in groups:
++                groups[rec.group_name] = []
++            groups[rec.group_name].append(rec)
++        
++        # 优先级排序
++        priority_names = {1: "高优先级（强烈建议）", 2: "中优先级（建议选修）", 3: "低优先级（可选）"}
++        
++        for priority in [1, 2, 3]:
++            priority_recs = [r for r in recommendations if r.priority == priority]
++            if priority_recs:
++                lines.append(f"## {priority_names.get(priority, '推荐课程')}")
++                lines.append("")
++                
++                for rec in priority_recs:
++                    lines.append(f"### {rec.course_name}")
++                    lines.append(f"- **课程号**: {rec.course_code}")
++                    lines.append(f"- **学分**: {rec.credits}")
++                    lines.append(f"- **所属课组**: {rec.group_name}")
++                    lines.append(f"- **开课院系**: {rec.department}")
++                    lines.append(f"- **任课教师**: {rec.teacher_name}")
++                    if rec.rating > 0:
++                        lines.append(f"- **课程评分**: {rec.rating:.1f} ({rec.grade})")
++                    lines.append(f"- **推荐理由**: {rec.reason}")
++                    lines.append("")
++        
++        # 选课建议
++        total_credits = sum(r.credits for r in recommendations)
++        lines.append("## 选课建议")
++        lines.append("")
++        lines.append(f"- 本次推荐共 {len(recommendations)} 门课程，合计 {total_credits} 学分")
++        lines.append("- 通识选修课要求：总学分≥11学分，每个课组至少2学分")
++        lines.append("- 建议优先选择高优先级课程，以满足课组最低学分要求")
++        lines.append("- 课程评分数据来自往届学生评教，仅供参考")
++        
++        return "\n".join(lines)
++
++
++# 便捷函数
++_recommendation_engine: Optional[GeneralEduRecommendationEngine] = None
++
++
++def get_recommendation_engine() -> GeneralEduRecommendationEngine:
++    """获取推荐引擎实例"""
++    global _recommendation_engine
++    if _recommendation_engine is None:
++        _recommendation_engine = GeneralEduRecommendationEngine()
++    return _recommendation_engine
++
++
++def recommend_general_edu_courses(
++    completed_courses: List[Dict[str, Any]],
++    user_preferences: Optional[Dict] = None,
++    target_group: Optional[str] = None,
++    max_recommendations: int = 10
++) -> Dict[str, Any]:
++    """
++    推荐通识选修课的便捷函数
++    
++    Args:
++        completed_courses: 已修课程列表
++        user_preferences: 用户偏好
++        target_group: 指定课组，如 "art", "science", "humanities", "social"
++        max_recommendations: 最多推荐课程数
++        
++    Returns:
++        包含推荐结果的字典
++    """
++    if user_preferences is None:
++        user_preferences = {}
++    
++    # 如果指定了目标课组，添加到 preferences
++    if target_group:
++        user_preferences["target_group"] = target_group
++    
++    engine = get_recommendation_engine()
++    recommendations = engine.recommend(
++        completed_courses,
++        user_preferences,
++        max_recommendations_per_group=3
++    )
++    
++    return {
++        'recommendations': [
++            {
++                'course_code': r.course_code,
++                'course_name': r.course_name,
++                'credits': r.credits,
++                'group_name': r.group_name,
++                'group_key': r.group_key,
++                'teacher_name': r.teacher_name,
++                'department': r.department,
++                'rating': r.rating,
++                'grade': r.grade,
++                'reason': r.reason,
++                'priority': r.priority
++            }
++            for r in recommendations[:max_recommendations]
++        ],
++        'total_count': len(recommendations),
++        'report': engine.generate_recommendation_report(recommendations[:max_recommendations])
++    }
++
++
++def analyze_general_edu_gaps(completed_courses: List[Dict[str, Any]]) -> Dict[str, Any]:
++    """
++    分析通识课缺口的便捷函数
++    
++    Returns:
++        缺口分析结果
++    """
++    service = get_general_edu_service()
++    analysis = service.analyze_completion(completed_courses)
++    
++    incomplete_groups = service.get_incomplete_groups(analysis)
++    
++    return {
++        'total_required': analysis.total_required,
++        'total_earned': analysis.total_earned,
++        'total_missing': analysis.total_missing,
++        'all_complete': analysis.all_groups_complete,
++        'incomplete_groups': [
++            {
++                'group_name': g.group_name,
++                'credits_required': g.credits_required,
++                'credits_earned': g.credits_earned,
++                'credits_missing': g.credits_missing
++            }
++            for g in incomplete_groups
++        ],
++        'detailed_analysis': [
++            {
++                'group_name': g.group_name,
++                'is_complete': g.is_complete,
++                'credits_earned': g.credits_earned,
++                'credits_required': g.credits_required,
++                'credits_missing': g.credits_missing,
++                'completed_courses': g.completed_courses
++            }
++            for g in analysis.group_completions
++        ]
++    }
+diff --git a/backend/services/general_edu_service.py b/backend/services/general_edu_service.py
+new file mode 100644
+index 0000000..b86cef1
+--- /dev/null
++++ b/backend/services/general_edu_service.py
+@@ -0,0 +1,380 @@
++"""通识选修课课组服务
++
++处理通识选修课四大课组（科学、人文、社科、艺术）的课程管理和学分统计。
++"""
++
++import re
++import os
++from dataclasses import dataclass, field
++from typing import List, Dict, Optional, Set, Tuple, Any
++from pathlib import Path
++
++
++@dataclass
++class GeneralEduCourse:
++    """通识选修课课程"""
++    code: str
++    name: str
++    credits: float
++    group: str  # 'science', 'humanities', 'social', 'art'
++
++
++@dataclass
++class GroupRequirement:
++    """课组学分要求"""
++    group_name: str  # 课组名称
++    group_key: str   # 课组标识符
++    min_credits: float  # 最少修读学分
++    courses: List[GeneralEduCourse] = field(default_factory=list)
++
++
++@dataclass
++class GroupCompletion:
++    """课组完成情况"""
++    group_name: str
++    group_key: str
++    credits_required: float
++    credits_earned: float
++    credits_missing: float
++    is_complete: bool
++    completed_courses: List[Dict[str, Any]]  # 已修课程列表
++    available_courses: List[GeneralEduCourse]  # 可选课程列表（未修的）
++
++
++@dataclass
++class GeneralEduAnalysis:
++    """通识选修课完整分析结果"""
++    total_required: float  # 总学分要求
++    total_earned: float    # 已修总学分
++    total_missing: float   # 还差多少学分
++    group_completions: List[GroupCompletion]
++    all_groups_complete: bool  # 所有课组是否都满足最低要求
++
++
++class GeneralEduService:
++    """通识选修课服务"""
++    
++    # 课组配置
++    # 未央书院通识选修课要求：
++    # - 总学分要求：11学分
++    # - 科学课组：至少3学分（比其他课组多1学分）
++    # - 人文、社科、艺术课组：每个至少2学分
++    GROUP_CONFIG = {
++        'science': {
++            'name': '科学课组',
++            'file': 'science.md',
++            'min_credits': 3.0,  # 未央书院要求：科学课组至少3学分
++        },
++        'humanities': {
++            'name': '人文课组',
++            'file': 'Humanities.md',
++            'min_credits': 2.0,
++        },
++        'social': {
++            'name': '社科课组',
++            'file': 'Social.md',
++            'min_credits': 2.0,
++        },
++        'art': {
++            'name': '艺术课组',
++            'file': 'Art.md',
++            'min_credits': 2.0,
++        },
++    }
++    
++    # 通识选修课总学分要求
++    TOTAL_REQUIRED_CREDITS = 11.0
++    
++    def __init__(self):
++        self.project_root = self._get_project_root()
++        self.general_edu_dir = self.project_root / "generalEdu"
++        self._group_courses: Dict[str, List[GeneralEduCourse]] = {}
++        self._load_all_groups()
++    
++    def _get_project_root(self) -> Path:
++        """获取项目根目录"""
++        current_file = Path(__file__).resolve()
++        # backend/services/general_edu_service.py -> project_root
++        return current_file.parent.parent.parent
++    
++    def _load_all_groups(self):
++        """加载所有课组的课程"""
++        for group_key, config in self.GROUP_CONFIG.items():
++            courses = self._parse_group_file(config['file'], group_key)
++            self._group_courses[group_key] = courses
++    
++    def _parse_group_file(self, filename: str, group_key: str) -> List[GeneralEduCourse]:
++        """解析课组 Markdown 文件"""
++        file_path = self.general_edu_dir / filename
++        if not file_path.exists():
++            return []
++        
++        courses = []
++        content = file_path.read_text(encoding='utf-8')
++        
++        # 解析课程表格
++        # 表格格式：| 课程号 | 课程名 | 学分 |
++        in_table = False
++        for line in content.split('\n'):
++            line = line.strip()
++            
++            # 检测表格行
++            if line.startswith('|') and '课程号' not in line and '---' not in line:
++                cells = [c.strip() for c in line.split('|')[1:-1]]
++                if len(cells) >= 3:
++                    code = cells[0].strip()
++                    name = cells[1].strip()
++                    credits_str = cells[2].strip()
++                    
++                    # 清理课程号中的引号
++                    code = code.replace("'", "").replace('"', '')
++                    
++                    try:
++                        credits = float(credits_str) if credits_str else 0.0
++                    except ValueError:
++                        credits = 0.0
++                    
++                    if code and name:
++                        courses.append(GeneralEduCourse(
++                            code=code,
++                            name=name,
++                            credits=credits,
++                            group=group_key
++                        ))
++        
++        return courses
++    
++    def get_group_courses(self, group_key: str) -> List[GeneralEduCourse]:
++        """获取指定课组的所有课程"""
++        return self._group_courses.get(group_key, [])
++    
++    def get_all_courses(self) -> List[GeneralEduCourse]:
++        """获取所有通识选修课"""
++        all_courses = []
++        for courses in self._group_courses.values():
++            all_courses.extend(courses)
++        return all_courses
++    
++    def find_course_by_code(self, course_code: str) -> Optional[GeneralEduCourse]:
++        """通过课程号查找通识课"""
++        course_code = course_code.strip().replace("'", "").replace('"', '')
++        for courses in self._group_courses.values():
++            for course in courses:
++                if course.code == course_code:
++                    return course
++        return None
++    
++    def find_course_by_name(self, course_name: str) -> Optional[GeneralEduCourse]:
++        """通过课程名查找通识课（模糊匹配）"""
++        for courses in self._group_courses.values():
++            for course in courses:
++                if course.name in course_name or course_name in course.name:
++                    return course
++        return None
++    
++    def analyze_completion(
++        self,
++        completed_courses: List[Dict[str, Any]]
++    ) -> GeneralEduAnalysis:
++        """
++        分析通识选修课完成情况
++        
++        Args:
++            completed_courses: 已修课程列表，每项包含 code, name, credits, grade 等
++        
++        Returns:
++            GeneralEduAnalysis: 分析结果
++        """
++        group_completions = []
++        total_earned = 0.0
++        all_complete = True
++        
++        # 已修课程的课程号集合（用于判断课程是否已修）
++        completed_codes = set()
++        completed_names = set()
++        for c in completed_courses:
++            if c.get('code'):
++                completed_codes.add(c.get('code').strip())
++            if c.get('name'):
++                completed_names.add(c.get('name').strip())
++        
++        for group_key, config in self.GROUP_CONFIG.items():
++            group_courses = self._group_courses.get(group_key, [])
++            required_credits = config['min_credits']
++            
++            # 计算该课组已修学分
++            earned_credits = 0.0
++            group_completed = []
++            
++            for course in completed_courses:
++                if not course.get('is_passed', True):
++                    continue
++                    
++                course_code = course.get('code', '').strip()
++                course_name = course.get('name', '').strip()
++                course_credits = course.get('credits', 0.0)
++                
++                # 检查该课程是否属于当前课组
++                is_in_group = False
++                for ge_course in group_courses:
++                    # 课程号匹配
++                    if course_code and ge_course.code == course_code:
++                        is_in_group = True
++                        break
++                    # 课程名模糊匹配
++                    if course_name and (ge_course.name in course_name or course_name in ge_course.name):
++                        is_in_group = True
++                        break
++                
++                if is_in_group:
++                    earned_credits += course_credits
++                    group_completed.append({
++                        'code': course_code,
++                        'name': course_name,
++                        'credits': course_credits,
++                    })
++            
++            # 该课组未修的课程
++            available_courses = []
++            for ge_course in group_courses:
++                is_completed = False
++                for completed in group_completed:
++                    if (completed['code'] and ge_course.code == completed['code']) or \
++                       (completed['name'] and ge_course.name in completed['name']):
++                        is_completed = True
++                        break
++                if not is_completed:
++                    available_courses.append(ge_course)
++            
++            missing_credits = max(0, required_credits - earned_credits)
++            is_complete = earned_credits >= required_credits
++            
++            if not is_complete:
++                all_complete = False
++            
++            group_completions.append(GroupCompletion(
++                group_name=config['name'],
++                group_key=group_key,
++                credits_required=required_credits,
++                credits_earned=earned_credits,
++                credits_missing=missing_credits,
++                is_complete=is_complete,
++                completed_courses=group_completed,
++                available_courses=available_courses
++            ))
++            
++            total_earned += earned_credits
++        
++        total_missing = max(0, self.TOTAL_REQUIRED_CREDITS - total_earned)
++        
++        return GeneralEduAnalysis(
++            total_required=self.TOTAL_REQUIRED_CREDITS,
++            total_earned=total_earned,
++            total_missing=total_missing,
++            group_completions=group_completions,
++            all_groups_complete=all_complete
++        )
++    
++    def get_incomplete_groups(
++        self,
++        analysis: GeneralEduAnalysis
++    ) -> List[GroupCompletion]:
++        """获取未完成的课组列表"""
++        return [g for g in analysis.group_completions if not g.is_complete]
++    
++    def generate_analysis_report(self, analysis: GeneralEduAnalysis) -> str:
++        """生成通识选修课分析报告"""
++        lines = ["## 通识选修课完成情况分析", ""]
++        
++        # 总体情况
++        lines.append(f"**总学分要求**: {analysis.total_required} 学分")
++        lines.append(f"**已修学分**: {analysis.total_earned} 学分")
++        lines.append(f"**剩余学分**: {analysis.total_missing} 学分")
++        lines.append("")
++        
++        # 各课组情况
++        lines.append("### 各课组完成情况")
++        lines.append("")
++        
++        for group in analysis.group_completions:
++            status = "✅ 已完成" if group.is_complete else "❌ 未完成"
++            lines.append(f"**{group.group_name}**: {group.credits_earned}/{group.credits_required} 学分 {status}")
++            
++            if group.completed_courses:
++                lines.append(f"  - 已修课程: {', '.join([c['name'] for c in group.completed_courses])}")
++            
++            if not group.is_complete:
++                lines.append(f"  - 还需: {group.credits_missing} 学分")
++            lines.append("")
++        
++        # 未完成课组建议
++        incomplete = self.get_incomplete_groups(analysis)
++        if incomplete:
++            lines.append("### 选课建议")
++            lines.append("")
++            for group in incomplete:
++                lines.append(f"**{group.group_name}** 还需修读 {group.credits_missing} 学分，建议从以下课程中选择:")
++                # 推荐该课组中评分较高的课程（前5门）
++                for course in group.available_courses[:5]:
++                    lines.append(f"  - {course.name} ({course.credits}学分, 课程号: {course.code})")
++                lines.append("")
++        
++        return "\n".join(lines)
++
++
++# 全局服务实例
++_general_edu_service: Optional[GeneralEduService] = None
++
++
++def get_general_edu_service() -> GeneralEduService:
++    """获取通识课服务实例（单例模式）"""
++    global _general_edu_service
++    if _general_edu_service is None:
++        _general_edu_service = GeneralEduService()
++    return _general_edu_service
++
++
++def analyze_general_edu_completion(
++    completed_courses: List[Dict[str, Any]]
++) -> Dict[str, Any]:
++    """
++    分析通识选修课完成情况的便捷函数
++    
++    Args:
++        completed_courses: 已修课程列表
++        
++    Returns:
++        分析结果字典
++    """
++    service = get_general_edu_service()
++    analysis = service.analyze_completion(completed_courses)
++    
++    return {
++        'total_required': analysis.total_required,
++        'total_earned': analysis.total_earned,
++        'total_missing': analysis.total_missing,
++        'all_groups_complete': analysis.all_groups_complete,
++        'groups': [
++            {
++                'group_name': g.group_name,
++                'group_key': g.group_key,
++                'credits_required': g.credits_required,
++                'credits_earned': g.credits_earned,
++                'credits_missing': g.credits_missing,
++                'is_complete': g.is_complete,
++                'completed_courses': g.completed_courses,
++                'available_courses': [
++                    {'code': c.code, 'name': c.name, 'credits': c.credits}
++                    for c in g.available_courses
++                ]
++            }
++            for g in analysis.group_completions
++        ]
++    }
++
++
++def generate_general_edu_report(completed_courses: List[Dict[str, Any]]) -> str:
++    """生成通识选修课分析报告的便捷函数"""
++    service = get_general_edu_service()
++    analysis = service.analyze_completion(completed_courses)
++    return service.generate_analysis_report(analysis)
+diff --git a/generalEdu/Art.md b/generalEdu/Art.md
+new file mode 100644
+index 0000000..266d656
+--- /dev/null
++++ b/generalEdu/Art.md
+@@ -0,0 +1,210 @@
++﻿# 通识选修 - 艺术课程列表
++
++## 课组信息
++
++## 课程明细（共 202 门）
++
++| 课程号 | 课程名 | 学分 |
++|--------|--------|------|
++| 00000051 | 建筑与城市美学 | 1 |
++| 00000171 | 中国近代建筑风格辨析与鉴赏 | 1 |
++| 00000182 | 城市设计元素导读 | 2 |
++| 00000212 | 风景之道：自然·设计·人 | 2 |
++| 00000231 | 中国近现代革命文物、红色遗产与建筑记忆 | 1 |
++| 00000262 | 中国近代建筑史 | 2 |
++| 00000291 | 形式范式与建筑想象力 | 1 |
++| 00000361 | 城市设计元素导读（英） | 1 |
++| 00020021 | 认识文化遗产 | 1 |
++| 00030131 | 结构中的技术和艺术 | 1 |
++| 00040132 | 宝玉石鉴赏 | 2 |
++| 00450192 | 花卉鉴赏 | 2 |
++| 00670143 | 电影文化 | 3 |
++| 00670413 | 视听语言与短片创作 | 3 |
++| 00690302 | 昆曲艺术欣赏 | 2 |
++| 00691513 | 西方古典与中世纪艺术史 | 3 |
++| 00691523 | 西方文艺复兴与早期现代艺术史 | 3 |
++| 00692402 | 书法临摹与创作 | 2 |
++| 00692412 | 博物馆中的艺术与科技 | 2 |
++| 00692513 | 昆曲艺术欣赏 | 3 |
++| 00692572 | 艺博奇遇记：学会“看”展览 | 2 |
++| 00780051 | 舞蹈欣赏与实践 | 1 |
++| 00780091 | 大学生音乐知识与欣赏 | 1 |
++| 00780231 | 钢琴即兴伴奏 | 1 |
++| 00780271 | 交响音乐赏析 | 1 |
++| 00780311 | 民族管弦乐合奏(1) | 1 |
++| 00780321 | 管弦乐合奏(1) | 1 |
++| 00780331 | 管乐合奏(1) | 1 |
++| 00780341 | 交响管乐合奏(1) | 1 |
++| 00780421 | 国际标准舞表演(1) | 1 |
++| 00780461 | 钢琴入门与音乐基础 | 1 |
++| 00780531 | 民族与现代舞赏析 | 1 |
++| 00780611 | 民族管弦乐合奏(2) | 1 |
++| 00780621 | 管弦乐合奏(2) | 1 |
++| 00780631 | 管乐合奏(2) | 1 |
++| 00780641 | 交响管乐合奏(2) | 1 |
++| 00780721 | 国际标准舞表演(2) | 1 |
++| 00780761 | 民族管弦乐合奏(3) | 1 |
++| 00780871 | 国际标准舞表演(3) | 1 |
++| 00780951 | 民族管弦乐合奏(4) | 1 |
++| 00781061 | 国际标准舞表演(4) | 1 |
++| 00781141 | 音乐会管乐合奏(1) | 1 |
++| 00781151 | 音乐会管乐合奏(2) | 1 |
++| 00781161 | 国际标准舞表演(5) | 1 |
++| 00781171 | 国际标准舞表演(6) | 1 |
++| 00781241 | 交响乐合奏(1) | 1 |
++| 00781251 | 交响乐合奏(2) | 1 |
++| 00781281 | 室内乐合唱(1) | 1 |
++| 00781291 | 室内乐合唱(2) | 1 |
++| 00781301 | 音乐会合唱(1) | 1 |
++| 00781311 | 音乐会合唱(2) | 1 |
++| 00781321 | 古典主义钢琴作品演奏(1) | 1 |
++| 00781331 | 古典主义钢琴作品演奏(2) | 1 |
++| 00781341 | 浪漫主义与二十世纪钢琴作品演奏(1) | 1 |
++| 00781351 | 浪漫主义与二十世纪钢琴作品演奏(2) | 1 |
++| 00781441 | 中国古典舞蹈(1) | 1 |
++| 00781451 | 中国古典舞蹈(2) | 1 |
++| 00781461 | 中国优秀传统舞蹈(1) | 1 |
++| 00781471 | 中国优秀传统舞蹈(2) | 1 |
++| 00781481 | 京剧基本功训练(1) | 1 |
++| 00781491 | 京剧基本功训练(2) | 1 |
++| 00781501 | 京剧基本功训练及表演(1) | 1 |
++| 00781511 | 京剧基本功训练及表演(2) | 1 |
++| 00781521 | 京剧折子戏排演(1) | 1 |
++| 00781531 | 京剧折子戏排演(2) | 1 |
++| 00781541 | 话剧表演艺术基础(1) | 1 |
++| 00781551 | 话剧表演艺术基础(2) | 1 |
++| 00781561 | 话剧艺术综合训练(1) | 1 |
++| 00781571 | 话剧艺术综合训练(2) | 1 |
++| 00781581 | 话剧创作与导演、表演实践(1) | 1 |
++| 00781591 | 话剧创作与导演、表演实践(2) | 1 |
++| 00781641 | 美术实践与创作(1) | 1 |
++| 00781651 | 美术实践与创作(2) | 1 |
++| 00781831 | 校园歌曲创作（1） | 1 |
++| 00781882 | 多元文化中的音乐现象 | 2 |
++| 00781892 | 20世纪中国歌曲发展史 | 2 |
++| 00781912 | 戏曲与中国传统文化 | 2 |
++| 00781921 | 交响乐合奏（3） | 1 |
++| 00781931 | 音乐会合唱(3) | 1 |
++| 00781941 | 浪漫主义与二十世纪钢琴作品演奏(3) | 1 |
++| 00781951 | 中国当代经典舞蹈（1） | 1 |
++| 00781971 | 交响乐合奏（4） | 1 |
++| 00781981 | 音乐会合唱（4） | 1 |
++| 00781991 | 浪漫主义与二十世纪钢琴作品演奏（4） | 1 |
++| 00782041 | 中国当代舞蹈经典(2) | 1 |
++| 00782051 | 民族管弦乐合奏(5) | 1 |
++| 00782071 | 民族管弦乐合奏(6) | 1 |
++| 00782082 | 影视艺术概论与作品赏析 | 2 |
++| 00782152 | 西方音乐史 | 2 |
++| 00782171 | 昆曲艺术与文化传承 | 1 |
++| 00782191 | 芭蕾基本功训练与技巧 | 1 |
++| 00782211 | 美国音乐剧精读 | 1 |
++| 00782221 | 现代舞基础 | 1 |
++| 00782231 | 中国民族舞基础 | 1 |
++| 00782261 | 琵琶演奏基础 | 1 |
++| 00782311 | 西方经典歌剧赏析 | 1 |
++| 00782321 | 声乐基础训练 | 1 |
++| 00782331 | 京剧艺术赏析 | 1 |
++| 00782412 | 微电影创作 | 2 |
++| 00782431 | 曲艺表演基础训练（2） | 1 |
++| 00782501 | 琵琶演奏提高 | 1 |
++| 00782511 | 声乐基础提高 | 1 |
++| 00782521 | 曲艺表演基础训练（3） | 1 |
++| 00782531 | 西方戏剧艺术与精品赏析 | 1 |
++| 00782571 | 舞蹈文化探究与创作实践 | 1 |
++| 00782601 | 曲艺表演艺术实践 | 1 |
++| 00782621 | 合唱指挥基础 | 1 |
++| 00782641 | 基本乐理与名歌学唱 | 1 |
++| 00782651 | 曲艺表演基础训练(1) | 1 |
++| 00782691 | 小提琴演奏基础 | 1 |
++| 00782712 | 西方弦乐艺术探究 | 2 |
++| 00782741 | 舞蹈文化与审美 | 1 |
++| 00782751 | 书法文化与艺术实践 | 1 |
++| 00782761 | 京剧表演史论与生行艺术实践 | 1 |
++| 00782771 | 京剧表演史论与旦行艺术实践 | 1 |
++| 00782791 | 小提琴演奏基础(2) | 1 |
++| 00782801 | 西方音乐与观念 | 1 |
++| 00782861 | 古琴演奏及古琴作品赏析 | 1 |
++| 00782871 | 硬笔书法赏析与实践 | 1 |
++| 00782922 | 中国古典舞蹈文化研习 | 2 |
++| 00782932 | 西方戏剧作品精读 | 2 |
++| 00782942 | 歌曲编配理论与制作 | 2 |
++| 00782952 | 相声艺术鉴赏 | 2 |
++| 00782962 | 电影音乐创作 | 2 |
++| 00782972 | 声音设计与研创 | 2 |
++| 00782982 | 古谱诗词与中国音乐文学 | 2 |
++| 00782992 | 类型电影创意设计与剧本写作 | 2 |
++| 00783032 | 表导演基础 | 2 |
++| 00783052 | 中外名剧赏析 | 2 |
++| 00783061 | 芭蕾美育与芭蕾基训 | 1 |
++| 00783081 | 中国古典舞蹈文化研习（1） | 1 |
++| 00783091 | 中国古典舞蹈文化研习（2） | 1 |
++| 00783102 | 中国民歌与地域文化 | 2 |
++| 00783112 | 音乐理论基础与声乐训练 | 2 |
++| 00783122 | 原创剧本基础写作（1） | 2 |
++| 00783132 | 原创剧本基础写作（2） | 2 |
++| 00783172 | 声乐基础理论与技能训练 | 2 |
++| 00783192 | 电影编剧艺术 | 2 |
++| 00783202 | 交响音乐赏析 | 2 |
++| 00783212 | 音乐剧作品研读 | 2 |
++| 00783222 | 音乐理论基础 | 2 |
++| 00783232 | 舞蹈文化探究与作品创作 | 2 |
++| 00783242 | 声乐表演艺术与作品赏析 | 2 |
++| 00783252 | 西方经典歌剧赏析 | 2 |
++| 00783262 | 非遗中国舞蹈——历史与传承 | 2 |
++| 00800032 | 中国工艺美术史 | 2 |
++| 00800042 | 外国工艺美术史 | 2 |
++| 00800871 | 设计思维 | 1 |
++| 00802762 | 外国美术史 | 2 |
++| 00802961 | 服饰赏析 | 1 |
++| 00803062 | 新媒体艺术 | 2 |
++| 00803812 | 现当代美术专题 | 2 |
++| 00803973 | 陶艺基础—拉坯成型 | 3 |
++| 00804011 | 室内设计艺术鉴赏 | 1 |
++| 00804021 | 绘画与观看 | 1 |
++| 00804032 | 天然植物染色艺术 | 2 |
++| 00804082 | 工笔花卉赏析与实践 | 2 |
++| 00804092 | 陶瓷艺术赏析与实践 | 2 |
++| 00804202 | 服饰搭配与制作 | 2 |
++| 00804242 | 设计与科技创业实验室 | 2 |
++| 00804352 | 金属艺术 | 2 |
++| 00804432 | 传统花鸟工笔画临摹 | 2 |
++| 00804513 | 材料再造 | 3 |
++| 00804862 | 活版印刷与手工书实践 | 2 |
++| 00804912 | 中国花鸟画赏析与实践 | 2 |
++| 00805002 | 当代摄影与跨媒体艺术 | 2 |
++| 00805092 | e时代的空间与集成设计 | 2 |
++| 00805112 | 古琴文化与传统工艺 | 2 |
++| 00805132 | 陶艺创作 | 2 |
++| 00805202 | 室内设计初步 | 2 |
++| 00805212 | 珐琅艺术 | 2 |
++| 00805235 | 中国传统雕塑赏析与研习 | 5 |
++| 00805282 | 当代视觉艺术与设计 | 2 |
++| 00805291 | 中国汉字设计史 | 1 |
++| 00805412 | 中国画艺术赏析与实践 | 2 |
++| 00805672 | 人工智能与艺术设计 | 2 |
++| 01510623 | 设计思维与综合构成 | 3 |
++| 01510772 | 手工书设计 | 2 |
++| 01510782 | 陶-铸艺术品的传承与创新 | 2 |
++| 01510823 | 人工智能时代的设计思维 | 3 |
++| 01510843 | 空间计算与交互设计 | 3 |
++| 10000034 | 建筑与城市文化 | 4 |
++| 10000062 | 城市空间认知与设计概论 | 2 |
++| 10000141 | 体验建筑 | 1 |
++| 10230052 | 光电子学视角下艺术与科学的融合实践 | 2 |
++| 10780012 | 西方音乐剧史 | 2 |
++| 10780022 | 音乐剧表演体验 | 2 |
++| 10780032 | 舞蹈审美与创作实践 | 2 |
++| 10780043 | 西方文化中的古典音乐 | 3 |
++| 10780053 | 中外戏剧史 | 3 |
++| 10780062 | 编剧理论与技巧 | 2 |
++| 10780072 | 戏剧的启示——从文本到舞台 | 2 |
++| 10780082 | 剧本阅读与鉴赏 | 2 |
++| 10780092 | 戏剧编导创作——基础理论与实践 | 2 |
++| 10780102 | 电影音乐赏析 | 2 |
++| 10780112 | 京剧与中国传统文化 | 2 |
++| 10780142 | 自我启示剧场 | 2 |
++| 10780152 | 京昆名剧赏析 | 2 |
++| 10800163 | 艺术的启示 | 3 |
++| 10800231 | 可持续设计导论 | 1 |
++| 14700212 | 西方现代设计史 | 2 |
++| 14700372 | 作曲与绘画 | 2 |
+diff --git a/generalEdu/Humanities.md b/generalEdu/Humanities.md
+new file mode 100644
+index 0000000..2f278d1
+--- /dev/null
++++ b/generalEdu/Humanities.md
+@@ -0,0 +1,151 @@
++﻿# 通识选修 - 人文课程列表
++
++## 课组信息
++- **公共课组号**：
++- **课程总门数**： 门
++- **课程总学时**：
++- **最少修读学分**： 学分
++- **课组属性**：
++
++## 课程明细（共 138 门）
++
++| 课程号 | 课程名 | 学分 |
++|--------|--------|------|
++| 00000241 | 台湾历史与城市 | 1 |
++| 00000302 | 中国技术思想史 | 2 |
++| 00000311 | 传统设计智慧与可持续建筑设计 | 1 |
++| 00000341 | 理想城市、国家建构与全球运动：20世纪西方城市规划思想史 | 1 |
++| 00000351 | 乡土建筑与中国文化 | 1 |
++| 00020041 | 建筑的文化理解 | 1 |
++| 00150151 | 汽车文化 | 1 |
++| 00460072 | 中国历史地理 | 2 |
++| 00640941 | 理解文学－从文艺复兴到现代主义 | 1 |
++| 00641452 | 英语文学中的中国形象 | 2 |
++| 00641662 | 莎士比亚悲剧与喜剧精读 | 2 |
++| 00641742 | 文学研究中的当代英语 | 2 |
++| 00641782 | 德国浪漫派的道家阐释 | 2 |
++| 00641842 | 历史中的翻译 | 2 |
++| 00641892 | 沟通的艺术 | 2 |
++| 00642223 | 探索人类语言的奥秘 | 3 |
++| 00642233 | 环境文学读写 | 3 |
++| 00642272 | 印度文明 | 2 |
++| 00642283 | 世界文学视野下的当代中国 | 3 |
++| 00642292 | 中印文明互鉴 | 2 |
++| 00642303 | 语言与结构 | 3 |
++| 00642312 | 日本社会文化 | 2 |
++| 00660242 | 法律与神话传说 | 2 |
++| 00670072 | 走在路上的叙事艺术 | 2 |
++| 00670091 | 新闻中的文化 | 1 |
++| 00670241 | 跨文化沟通 | 1 |
++| 00670381 | 文化多样性 | 1 |
++| 00670403 | 镜头中的国家与社会 | 3 |
++| 00670472 | 神话学引论 | 2 |
++| 00690022 | 古代中国-欧洲交流史 | 2 |
++| 00690062 | 围棋与中国文化 | 2 |
++| 00690162 | 中国文化名著导读 | 2 |
++| 00690262 | 《老子》与《论语》 | 2 |
++| 00690382 | 中西文化关系史 | 2 |
++| 00690542 | 儒学概论 | 2 |
++| 00690552 | 西方文学思潮与作品 | 2 |
++| 00690622 | 中国古典诗歌研究与赏析 | 2 |
++| 00690632 | 大学语文 | 2 |
++| 00690672 | 《庄子》导读 | 2 |
++| 00690882 | 《资治通鉴》导读 | 2 |
++| 00690912 | 清史概要 | 2 |
++| 00691153 | 不朽的艺术：走进大师与经典 | 3 |
++| 00691223 | 宗教学基础知识 | 3 |
++| 00691312 | 当代法国思想与文化研究 | 2 |
++| 00691353 | 汉字与中华传统文化 | 3 |
++| 00691443 | 先秦考古发现与艺术史 | 3 |
++| 00691483 | 简帛学 | 3 |
++| 00691502 | 中文应用文写作 | 2 |
++| 00691532 | 与人文对话 | 2 |
++| 00691563 | 现代西方哲学 | 3 |
++| 00691583 | 佛教哲学概论 | 3 |
++| 00691622 | 儒学与修身 | 2 |
++| 00691674 | 基础古希腊语 | 4 |
++| 00691682 | 与自然对话 | 2 |
++| 00691863 | 《老子》与《论语》 | 3 |
++| 00691872 | 故宫学 | 2 |
++| 00691913 | 《红楼梦》导读 | 3 |
++| 00691922 | 科学哲学导论 | 2 |
++| 00691932 | 书法与篆刻创作 | 2 |
++| 00692091 | 人际沟通 | 1 |
++| 00692142 | 二十世纪外国文学名著导读 | 2 |
++| 00692152 | 西方哲学导论 | 2 |
++| 00692172 | 科学仪器史 | 2 |
++| 00692212 | 达尔文革命 | 2 |
++| 00692252 | 艺术、哲学与科学 | 2 |
++| 00692262 | 西方古代中世纪科学史 | 2 |
++| 00692293 | 古希腊哲学经典研读 | 3 |
++| 00692312 | 现代科学哲学概论 | 2 |
++| 00692333 | 中国女性日常生活专题 | 3 |
++| 00692342 | 科学博物馆学 | 2 |
++| 00692353 | 技术与形而上学 | 3 |
++| 00692373 | 阿拉伯世界科学史 | 3 |
++| 00692422 | 全球卫生史 | 2 |
++| 00692432 | 中国气象学史 | 2 |
++| 00692441 | 人工智能的逻辑基础 | 1 |
++| 00692452 | 人文视角下的人工智能 | 2 |
++| 00692472 | 中医之道：环境与健康 | 2 |
++| 00692482 | 犹太文明：在传统与创新之间 | 2 |
++| 00692492 | 古代世界的科技与文明 | 2 |
++| 00692502 | 中西科技交流史 | 2 |
++| 00692523 | 达尔文革命 | 3 |
++| 00692533 | 生命科学史 | 3 |
++| 00692563 | 《西游记》与中国哲学 | 3 |
++| 00701322 | 西方古代政治思想 | 2 |
++| 01030192 | 教育哲学 | 2 |
++| 01510342 | 中华工匠——非遗技艺传承与技术创新 | 2 |
++| 01510643 | 未来生活设计与科技创新 | 3 |
++| 02070431 | 与生命共舞：自我成长之路 | 1 |
++| 04000272 | 民族医药的奥秘 | 2 |
++| 04202092 | 世界文学经典导读1：文学与人生 | 2 |
++| 04720043 | 中国史要论 | 3 |
++| 10460022 | 世界历史地理 | 2 |
++| 10590022 | 公共伦理 | 2 |
++| 10660043 | 经典与想象：中国古代传说新读 | 3 |
++| 10670033 | 跨喜马拉雅文化廊道初探 | 3 |
++| 10690013 | 学术之道 | 3 |
++| 10691093 | 《史记》研读 | 3 |
++| 10691113 | 西方思想经典与现代社会 | 3 |
++| 10691143 | 中国现代文学经典 | 3 |
++| 10691153 | 大学精神之源流 | 3 |
++| 10691173 | 《孟子》研读 | 3 |
++| 10691233 | 中国古代文明 | 3 |
++| 10691383 | 老庄研读 | 3 |
++| 10691402 | 悦读马克思 | 2 |
++| 10691412 | 孔子和鲁迅 | 2 |
++| 10691423 | 先秦历史文献选读 | 3 |
++| 10691452 | 媒介史与媒介哲学 | 2 |
++| 10691462 | 西方道德哲学导论 | 2 |
++| 10691473 | 中西哲学文化交流 | 3 |
++| 10691512 | 朝鲜半岛的历史与文化 | 2 |
++| 10691532 | 博物学史 | 2 |
++| 10691552 | 中国历史地理 | 2 |
++| 10691572 | 诗词格律与创作 | 2 |
++| 10691582 | 古典诗词阅读与鉴赏 | 2 |
++| 10691593 | 穆勒的道德和政治哲学 | 3 |
++| 10691603 | 逻辑与思维 | 3 |
++| 10691633 | 中国现代诗歌鉴赏与写作 | 3 |
++| 11030013 | 大学精神之源流 | 3 |
++| 14000032 | 医学与人类文明的进步 | 2 |
++| 14000062 | 认识和感悟中医药 | 2 |
++| 14203022 | 影视欣赏 | 2 |
++| 14700053 | 英国文学的人文理解 | 3 |
++| 14700073 | 西方近代哲学 | 3 |
++| 14700103 | 文学作品导读：西方现代小说 | 3 |
++| 14700143 | 十九世纪英国文学与艺术 | 3 |
++| 14700183 | 法律与文学 | 3 |
++| 14700233 | 《庄子》研读 | 3 |
++| 14700243 | 哲学的哲学 | 3 |
++| 14700253 | 西方古典学基础(古希腊罗马文明) | 3 |
++| 14700264 | 西方古典学基础(古希腊语) | 4 |
++| 14700293 | 中国哲学（1） | 3 |
++| 14700333 | 印度文明 | 3 |
++| 14700343 | 犹太文明 | 3 |
++| 14700393 | 知识、观念与文学 | 3 |
++| 14720012 | 《三国志》与三国史 | 2 |
++| 14720043 | 考古发现与《史记》 | 3 |
++| 14720063 | 中国古代社会生活史专题 | 3 |
++| 14730111 | 科技与人文研讨课 | 1 |
+diff --git a/generalEdu/README.md b/generalEdu/README.md
+new file mode 100644
+index 0000000..306583f
+--- /dev/null
++++ b/generalEdu/README.md
+@@ -0,0 +1,164 @@
++# 通识选修课课组功能说明
++
++## 功能概述
++
++本功能实现了对清华大学未央书院学生通识选修课（科学、人文、社科、艺术四大课组）的智能分析和管理。
++
++## 文件结构
++
++```
++generalEdu/
++├── science.md          # 科学课组课程列表（277门）
++├── Humanities.md       # 人文课组课程列表（138门）
++├── Social.md           # 社科课组课程列表（140门）
++├── Art.md              # 艺术课组课程列表（202门）
++└── README.md           # 本文件
++
++backend/services/
++├── general_edu_service.py          # 通识课核心服务
++├── general_edu_recommendation.py   # 通识课推荐引擎
++└── gap_calculator.py               # 集成通识课分析的缺口计算器
++
++backend/agent/
++├── general_edu_tools.py    # 通识课工具函数
++└── chat_graph.py           # 集成通识课意图的对话状态图
++
++backend/agent/chat_prompts.py  # 更新意图识别提示词
++```
++
++## 核心功能
++
++### 1. 课组学分统计
++
++根据学生成绩单，自动判断：
++- 每个课组（科学/人文/社科/艺术）已修多少学分
++- 是否满足各课组最低 2 学分的要求
++- 通识选修课总学分（11学分）完成情况
++
++### 2. 缺口分析
++
++回答学生关于通识课的问题：
++- "我哪个课组没修满？"
++- "我还差几学分？"
++- "我通识课完成情况如何？"
++
++### 3. 智能推荐
++
++结合课程评分数据（info_courses_stars/），推荐：
++- 优先推荐未完成课组的课程
++- 基于课程评分排序
++- 支持按兴趣标签筛选
++
++## 课组学分要求
++
++根据培养方案：
++- **总学分要求**: 11 学分
++- **各课组最低要求**: 2 学分/课组
++- **四大课组**: 科学、人文、社科、艺术
++
++## API 使用示例
++
++### 分析通识课完成情况
++
++```python
++from backend.services.general_edu_service import analyze_general_edu_completion
++
++completed_courses = [
++    {"code": "00240342", "name": "数据科学导论", "credits": 2.0, "is_passed": True},
++    {"code": "00690622", "name": "中国古典诗歌研究与赏析", "credits": 2.0, "is_passed": True},
++    # ... 更多课程
++]
++
++result = analyze_general_edu_completion(completed_courses)
++print(f"总学分: {result['total_earned']}/{result['total_required']}")
++print(f"所有课组完成: {result['all_groups_complete']}")
++
++for group in result['groups']:
++    print(f"{group['group_name']}: {group['credits_earned']}/{group['credits_required']} 学分")
++```
++
++### 推荐通识课
++
++```python
++from backend.services.general_edu_recommendation import recommend_general_edu_courses
++
++result = recommend_general_edu_courses(
++    completed_courses,
++    user_preferences={"interests": ["人工智能", "历史"]}
++)
++
++for rec in result['recommendations']:
++    print(f"{rec['course_name']} ({rec['group_name']}) - 评分: {rec['rating']}")
++```
++
++### 获取缺口描述
++
++```python
++from backend.agent.general_edu_tools import get_general_education_gaps
++
++report = get_general_education_gaps(completed_courses)
++print(report)
++```
++
++## 对话场景示例
++
++### 场景 1: 查询通识课完成情况
++
++**用户**: "我通识课修得怎么样了？"
++
++**助手**: 
++```
++**通识选修课完成情况**
++
++总体进度: 9/11 学分 (81.8%)
++
++✅ 科学课组: 4/2 学分
++✅ 人文课组: 2/2 学分  
++✅ 社科课组: 3/2 学分
++⚠️ 艺术课组: 0/2 学分
++
++您有 1 个课组未完成最低学分要求，建议优先补足。
++**艺术课组**还需修读 2.0 学分
++```
++
++### 场景 2: 推荐通识课
++
++**用户**: "给我推荐一些通识课，我对人工智能感兴趣"
++
++**助手**: 基于缺口分析，优先推荐艺术课组的高评分课程，同时筛选包含"人工智能"相关内容的课程。
++
++### 场景 3: 询问具体课组
++
++**用户**: "我艺术课组还差多少学分？"
++
++**助手**: "您目前艺术课组修了 1.0 学分，还差 1.0 学分。建议选修：建筑与城市美学 (1学分)、中国近代建筑风格辨析与鉴赏 (1学分) 等课程。"
++
++## 数据说明
++
++### 课程数据来源
++- 课程列表: generalEdu/ 目录下的 markdown 文件
++- 课程评分: info_courses_stars/ 目录下的评教数据
++- 课组要求: 2023级培养方案（通识选修课 11 学分，每课组至少 2 学分）
++
++### 课程匹配逻辑
++- 优先匹配课程号
++- 支持课程名模糊匹配
++- 自动处理重复课程（取最高成绩）
++
++## 集成说明
++
++本功能已集成到多轮对话系统中：
++
++1. **意图识别**: LLM 自动识别通识课相关查询（关键词：通识课、课组、还差几学分等）
++2. **节点处理**: `general_edu_node` 统一处理通识课分析和推荐
++3. **响应生成**: 根据用户具体提问生成个性化回复
++
++## 测试
++
++运行测试脚本：
++
++```bash
++python scripts/test_general_edu.py
++```
++
++测试输出保存在 `scripts/test_general_edu_output.md`
+diff --git a/generalEdu/Social.md b/generalEdu/Social.md
+new file mode 100644
+index 0000000..8c007af
+--- /dev/null
++++ b/generalEdu/Social.md
+@@ -0,0 +1,148 @@
++﻿# 通识选修 - 社科课程列表
++
++## 课组信息
++
++## 课程明细（共 140 门）
++
++| 课程号 | 课程名 | 学分 |
++|--------|--------|------|
++| 00000021 | 面向城乡协调的乡村规划 | 1 |
++| 00000131 | 极地建筑 | 1 |
++| 00000141 | 城市更新理论与实践认知 | 1 |
++| 00000252 | 跨学科视角下的居住问题 | 2 |
++| 00000272 | 以设计营共乐：解读与构想城市公共场所 | 2 |
++| 00000281 | 自然疗愈基础 | 1 |
++| 00040272 | 国际河流水安全 | 2 |
++| 00150182 | 工科的凝聚力素论—老子之领导力哲理 | 2 |
++| 00160102 | 思考的方法 | 2 |
++| 00240261 | 互联网创新与创业 | 1 |
++| 00320272 | 走近安全-漫谈国家安全 | 2 |
++| 00510133 | 会计学原理 | 3 |
++| 00510202 | 管理学基础 | 2 |
++| 00510222 | 质量管理学 | 2 |
++| 00510232 | 技术创新管理 | 2 |
++| 00510353 | 经济博弈论 | 3 |
++| 00510433 | 对策、决策与排队论 | 3 |
++| 00510454 | 经济学原理 | 4 |
++| 00511182 | 创新与人类文明 | 2 |
++| 00511192 | 可持续发展领导力 | 2 |
++| 00511203 | 可持续发展与创新：全球视角 | 3 |
++| 00511211 | 可持续发展领导力实践 | 1 |
++| 00511221 | 可持续发展：创意与市场 | 1 |
++| 00590043 | 中国国情与发展 | 3 |
++| 00590052 | 中国的统一与台湾问题 | 2 |
++| 00590062 | 腐败的政治经济学 | 2 |
++| 00590072 | 讲好知识的故事 | 2 |
++| 00590082 | 数字治理：法律、政策与实践 | 2 |
++| 00590092 | 人工智能发展与治理 | 2 |
++| 00600012 | 心理、行为与金融 | 2 |
++| 00600022 | 中美贸易争端和全球化重构 | 2 |
++| 00600033 | 新结构金融学：中国金融改革与发展 | 3 |
++| 00600043 | 人工智能与资本市场 | 3 |
++| 00660122 | 知识产权法 | 2 |
++| 00660132 | 合同法 | 2 |
++| 00660263 | 法律思维 | 3 |
++| 00660272 | 技术、制度与法治 | 2 |
++| 00660293 | 法律人类学导论 | 3 |
++| 00660302 | 人工智能与法律 | 2 |
++| 00670343 | 全球胜任力海外实践课程 | 3 |
++| 00670362 | 媒介素养综合知识与实践 | 2 |
++| 00670372 | 欧洲媒体、文化与社会 | 2 |
++| 00670453 | 大众传播与社会 | 3 |
++| 00670522 | 全球胜任力与文明对话 | 2 |
++| 00680042 | 中国政府与政治 | 2 |
++| 00690052 | 日本民族研究 | 2 |
++| 00690602 | 创新人才与大学文化 | 2 |
++| 00690772 | 俄罗斯民族研究 | 2 |
++| 00691202 | 战后中苏关系的演变和发展 | 2 |
++| 00691752 | 后现代科学哲学 | 2 |
++| 00691903 | 古典社会学思想 | 3 |
++| 00692023 | 现当代社会学思想 | 3 |
++| 00692042 | 现代逻辑基础 | 2 |
++| 00692101 | 经济学、公共政策与社会问题 | 1 |
++| 00700052 | 大学生心理健康 | 2 |
++| 00700942 | 民主与当代政治生活 | 2 |
++| 00700972 | 博弈论与政治 | 2 |
++| 00700992 | 司法政治 | 2 |
++| 00701162 | 西方政治制度 | 2 |
++| 00701271 | 心理学入门 | 1 |
++| 00701312 | 创新理论与案例 | 2 |
++| 00701332 | 性别与科技 | 2 |
++| 00701344 | 国际关系分析 | 4 |
++| 00701352 | 健康产业发展与管理 | 2 |
++| 00701413 | 欧洲联盟与中欧关系 | 3 |
++| 00701512 | 中国宏观经济分析 | 2 |
++| 00701522 | 生活中的经济学 | 2 |
++| 00701562 | 美国创新史 | 2 |
++| 00701572 | 经济外交调研与写作 | 2 |
++| 00701591 | 设计创新思维下的精益创业 | 1 |
++| 00701632 | 国际化学术研究与全球胜任力创新 | 2 |
++| 00701653 | 电影与政治 | 3 |
++| 00701702 | 当代世界政治重大议题研讨 | 2 |
++| 00701723 | 中美关系：问题与政策 | 3 |
++| 00701742 | 形势学 | 2 |
++| 00701752 | 经济外交 | 2 |
++| 00701762 | 数字经济学 | 2 |
++| 00701772 | 消费心理学 | 2 |
++| 00701782 | 科技伦理概论 | 2 |
++| 00701792 | 战争与经济发展 | 2 |
++| 00701812 | 空间、技术与政治哲学 | 2 |
++| 00701823 | 阅读亚当·斯密：道德、经济与政治 | 3 |
++| 00701833 | 解码新中国外交：历史、逻辑与未来 | 3 |
++| 00701852 | 中国政治经济 | 2 |
++| 00930022 | 走近安全-漫谈国家安全 | 2 |
++| 00950012 | 大学生心理健康训练 | 2 |
++| 00960032 | 健康促进：从行为改变开始 | 2 |
++| 00960053 | 全球卫生健康海外实践课程 | 3 |
++| 01030032 | 教育与就业 | 2 |
++| 01030052 | 社会科学研究方法论导论 | 2 |
++| 01030232 | 人工智能与教育 | 2 |
++| 01030251 | 家庭教育导论 | 1 |
++| 01510192 | 创业导引—与创业名家面对面 | 2 |
++| 01510673 | 创业思维 | 3 |
++| 02070021 | 学生社会工作概论 | 1 |
++| 02070071 | 大学生心理训练与潜能开发 | 1 |
++| 02070231 | 大学生职业生涯规划与发展：求职技巧实训 | 1 |
++| 02070251 | 大学生职业生涯规划与发展 | 1 |
++| 02070271 | 大学生创新创业基础 | 1 |
++| 02070321 | 沟通表达基础与进阶 | 1 |
++| 02070342 | 中国文化与中国国情（1） | 2 |
++| 02070351 | 中国文化与中国国情（2） | 1 |
++| 02070391 | 多元文化中的沟通与胜任力 | 1 |
++| 02070421 | 大学学习：原理与方法 | 1 |
++| 02070461 | 幸福心理团体训练 | 1 |
++| 02090011 | 孙子兵法导读 | 1 |
++| 02090051 | 当代国防系列讲座 | 1 |
++| 02090091 | 高技术战争 | 1 |
++| 04000022 | 公共健康 | 2 |
++| 04000292 | 健康经济学与健康财富 | 2 |
++| 04050011 | 亚健康调护与治理 | 1 |
++| 10030012 | 项目管理 | 2 |
++| 10240012 | 计算科学与生涯发展 | 2 |
++| 10460053 | 气候变化与全球发展 | 3 |
++| 10510173 | 批判性思维与道德推理 | 3 |
++| 10510263 | 管理学的思与行 | 3 |
++| 10510273 | 经济学通论 | 3 |
++| 10510302 | 沟通基础 | 2 |
++| 10510344 | 经济学原理 | 4 |
++| 10590032 | 发展规划 | 2 |
++| 10590043 | 全球史中的社会学 | 3 |
++| 10641573 | 学习科学探新 | 3 |
++| 10660012 | 法律基础 | 2 |
++| 10660033 | 主权与人权 | 3 |
++| 10691183 | 创新人才与大学文化 | 3 |
++| 10700043 | 社会学的想像力：结构、权力与转型 | 3 |
++| 10700053 | 经济学思维 | 3 |
++| 10700073 | 心智、个体与文化（英） | 3 |
++| 10700142 | 现代化与全球化思想研究 | 2 |
++| 10700172 | 社会不平等与社会治理 | 2 |
++| 10700183 | 心智探秘 | 3 |
++| 10700193 | 理解公共政策：多元视角与案例解析 | 3 |
++| 10700202 | 创新理论与实践 | 2 |
++| 10700212 | 睡眠与健康 | 2 |
++| 10750011 | 信息素养——学术研究的必备能力 | 1 |
++| 10960012 | 公共卫生与健康 | 2 |
++| 11030023 | 教育社会学导论 | 3 |
++| 14000052 | 医学心理学与健康生活 | 2 |
++| 14700402 | 金融学基础 | 2 |
++| 20510032 | 工程经济学 | 2 |
+diff --git a/generalEdu/science.md b/generalEdu/science.md
+new file mode 100644
+index 0000000..eeb21ca
+--- /dev/null
++++ b/generalEdu/science.md
+@@ -0,0 +1,290 @@
++﻿# 通识选修 - 科学课程列表
++
++## 课组信息
++- **公共课组号**：2319990042
++- **课程总门数**：308 门
++- **课程总学时**：9735
++- **最少修读学分**：2 学分
++- **课组属性**：限选
++
++## 课程明细（共 277 门）
++
++| 课程号 | 课程名 | 学分 |
++|--------|--------|------|
++| 00000011 | 建筑与能源、环境和气候变化 | 1 |
++| 00000021 | 面向城乡协调的乡村规划 | 1 |
++| 00000042 | 新城市科学 | 2 |
++| 00000062 | 健康建筑 | 2 |
++| 00000152 | 城市人因工程学方法 | 2 |
++| 00000162 | 绿色建筑：从理念到实践 | 2 |
++| 00000191 | 人体热舒适前沿 | 1 |
++| 00000201 | 跨学科视角下的无障碍与适老化 | 1 |
++| 00000332 | 人工智能与未来交通 | 2 |
++| 00030052 | 灾害及其对策 | 2 |
++| 00030151 | 工程师的科学思想与方法 | 1 |
++| 00030291 | 土木工程与防灾减灾 | 1 |
++| 00030342 | 智能搭建积木的原理与体验 | 2 |
++| 00040022 | 地球与人类环境 | 2 |
++| 00040091 | 潮汐发电-效益和环境影响 | 1 |
++| 00040122 | 水资源与水危机 | 2 |
++| 00040151 | 水权与水资源管理探索 | 1 |
++| 00040172 | 未来灾害调控 | 2 |
++| 00040221 | 历史大震 | 1 |
++| 00040302 | 工程域人工智能 | 2 |
++| 00050011 | 清洁生产导论 | 1 |
++| 00050021 | 工业生态学 | 1 |
++| 00050041 | 环境与发展 | 1 |
++| 00050071 | 环境保护与可持续发展 | 1 |
++| 00050083 | 基础地质学 | 3 |
++| 00050111 | 雾霾成因与防控 | 1 |
++| 00050121 | 环境安全与生物 | 1 |
++| 00050131 | 环境系统思维与大数据 | 1 |
++| 00050141 | 能源与气候变化 | 1 |
++| 00050151 | 水科学与水安全 | 1 |
++| 00050161 | 环境与化学 | 1 |
++| 00050171 | 固体废物：中国问题与全球视角 | 1 |
++| 00050181 | 环境物联网与大数据 | 1 |
++| 00050191 | 土壤与环境安全 | 1 |
++| 00050201 | 环境与健康 | 1 |
++| 00050211 | 环境危机与生态重建 | 1 |
++| 00050222 | 生态文明十五讲 | 2 |
++| 00050231 | 走进新能源与环境催化 | 1 |
++| 00050241 | 饮用水安全保障 | 1 |
++| 00050262 | 碳中和与减污降碳前沿讲座 | 2 |
++| 00050283 | 碳中和社会：能源、环境与行为 | 3 |
++| 00050292 | 全球环境变化与生活 | 2 |
++| 00050302 | 工程绿色低碳设计基础 | 2 |
++| 00120112 | 生物材料工程与器件 | 2 |
++| 00120222 | 表面工程基础 | 2 |
++| 00120232 | 工程生物学基础 | 2 |
++| 00120262 | 绿色制造与可持续发展 | 2 |
++| 00120272 | 机器人认知与实践 | 2 |
++| 00120281 | 先进医疗器械设计概论 | 1 |
++| 00130201 | 宇航技术的发展与微小卫星 | 1 |
++| 00130221 | 微/纳机电系统－奇妙的微小世界 | 1 |
++| 00130291 | 微米纳米技术与仪器 | 1 |
++| 00130322 | 类脑计算和类脑计算系统技术 | 2 |
++| 00130351 | 科技慧眼-现代生活中的检测传感技术 | 1 |
++| 00130411 | 纳米制造 | 1 |
++| 00140152 | 人工智能在能源动力系统中的应用概论 | 2 |
++| 00140162 | 碳中和与碳循环 | 2 |
++| 00150011 | 现代道路交通与安全 | 1 |
++| 00150051 | 智能化汽车 | 1 |
++| 00150092 | 产品创造系统工程学 | 2 |
++| 00150132 | 车用能源概论 | 2 |
++| 00150211 | 读懂新能源革命 | 1 |
++| 00150222 | 智能汽车安全 | 2 |
++| 00150252 | 汽车探秘——奇妙的构造 | 2 |
++| 00160062 | 工业生产管理概论 | 2 |
++| 00160093 | 统计学引论：数据分析的科学与艺术 | 3 |
++| 00220152 | 当代自然科学与哲学的对话 | 2 |
++| 00220182 | 等离子体与芯片制造 | 2 |
++| 00230101 | 集成电路简史 | 1 |
++| 00230162 | 光通信与信息社会 | 2 |
++| 00230171 | 电子工程的物理基础—材料与器件 | 1 |
++| 00230181 | 半导体与人类生活生产方式的变革 | 1 |
++| 00230202 | 光的技术：提升人类生活 | 2 |
++| 00230222 | 网络科学与技术研讨 | 2 |
++| 00240112 | 下一代互联网 | 2 |
++| 00240301 | 人工智能前沿探讨 | 1 |
++| 00240311 | 计算机系统研讨 | 1 |
++| 00240321 | 智能无人系统 | 1 |
++| 00240342 | 数据科学导论 | 2 |
++| 00240352 | 人文与社会科学计算导论 | 2 |
++| 00240362 | 计算思维 | 2 |
++| 00240392 | 人工智能基础与编程实践 | 2 |
++| 00240401 | 迈向通用的人工智能 | 1 |
++| 00250051 | 智能交通系统 | 1 |
++| 00250082 | 漫话滤波 | 2 |
++| 00250131 | 企业信息化概论 | 1 |
++| 00250141 | 视觉信息获取与显示 | 1 |
++| 00250161 | 太赫兹技术概论 | 1 |
++| 00250171 | 太空机器人技术研讨 | 1 |
++| 00250181 | 智能机器人初探 | 1 |
++| 00250202 | 无处不在的电子技术 | 2 |
++| 00250212 | 走近人工智能 | 2 |
++| 00260011 | 晶体管的发明和信息时代的诞生 | 1 |
++| 00260061 | 量子信息处理的超导实现 | 1 |
++| 00260092 | 固体量子计算和量子相干器件简介 | 2 |
++| 00310011 | 航天中的奇思妙想 | 1 |
++| 00310072 | 航空概论 | 2 |
++| 00310212 | 航天概论 | 2 |
++| 00310291 | 飞天的奥秘 | 1 |
++| 00310332 | 力学中的创意设计 | 2 |
++| 00310372 | 科学的运动——从肌肉组织到细胞的力学 | 2 |
++| 00310382 | 飞行基础理论与实践 | 2 |
++| 00320102 | 核心理学 | 2 |
++| 00320121 | 瓶装太阳-人类的聚变梦想 | 1 |
++| 00320131 | 智能安全城市 | 1 |
++| 00320141 | 核燃料循环与核武器 | 1 |
++| 00320151 | 灾害来临-应急科技保安全 | 1 |
++| 00320161 | 一双慧眼—辐射粒子的探测 | 1 |
++| 00320171 | 身边的粒子加速器 | 1 |
++| 00320181 | 灾难逃生的科学问题 | 1 |
++| 00320191 | 物理探索中的仪器 | 1 |
++| 00320201 | 探索医学中物理密码 | 1 |
++| 00320211 | 核能物理与超算 | 1 |
++| 00320221 | 辐射成像技术发展 | 1 |
++| 00320231 | 中子：改变世界的发现 | 1 |
++| 00320282 | 沙漠里的课堂 | 2 |
++| 00320292 | 探索未来城市：智慧、韧性与可持续 | 2 |
++| 00320302 | 口岸生物安全 | 2 |
++| 00340031 | 大分子的世界 | 1 |
++| 00340051 | 分子设计与化学工程 | 1 |
++| 00340071 | 生物能源与可持续发展 | 1 |
++| 00340081 | 人类与微生物 | 1 |
++| 00340153 | 纳米能源 | 3 |
++| 00340172 | 当代化学工程：应对全球挑战 | 2 |
++| 00340192 | 化学反应工程启蒙 | 2 |
++| 00340211 | 奇妙的高分子材料 | 1 |
++| 00340221 | 工业生物技术 | 1 |
++| 00340271 | 碳中和时代的化工技术 | 1 |
++| 00340282 | 人工智能与流程工业导论 | 2 |
++| 00350052 | 国内外新材料的奇妙应用 | 2 |
++| 00350171 | 纳米材料与未来科技 | 1 |
++| 00350181 | 神奇的氧化物 | 1 |
++| 00350191 | 信息技术中的新材料 | 1 |
++| 00420033 | 数学模型 | 3 |
++| 00420152 | 数学建模引论 | 2 |
++| 00420163 | 数理科学与人文 | 3 |
++| 00430093 | 天文学导论 | 3 |
++| 00440012 | 化学与社会 | 2 |
++| 00440051 | 磷与生命化学 | 1 |
++| 00440092 | 分析化学与现代社会 | 2 |
++| 00440101 | 纳米生物机器 | 1 |
++| 00450012 | 生态学 | 2 |
++| 00450182 | 生命科学简史 | 2 |
++| 00450252 | 生命的进化与保护 | 2 |
++| 00450261 | 生物钟与健康 | 1 |
++| 00450312 | 干细胞与生命 | 2 |
++| 00450331 | 演化-生命的源流 | 1 |
++| 00450342 | 动物行为学 | 2 |
++| 00450352 | 植物的智慧 | 2 |
++| 00450361 | 植物感官系统和反应 | 1 |
++| 00450372 | 鸟类学导论 | 2 |
++| 00450381 | 超级电子显微术与其展现的生命世界 | 1 |
++| 00460063 | 全球变化与可持续发展 | 3 |
++| 00460133 | 海洋学概论 | 3 |
++| 00460152 | 生态学原理与应用 | 2 |
++| 00460163 | 碳中和：气候与环境协同治理 | 3 |
++| 00510311 | 牛鞭效应－供应链管理入门 | 1 |
++| 00690092 | 逻辑学概论 | 2 |
++| 00691422 | 科学通史 | 2 |
++| 00691572 | 技术通史 | 2 |
++| 00691602 | 技术哲学导论 | 2 |
++| 00691652 | 生命科学史 | 2 |
++| 00691692 | 现代西方科学哲学 | 2 |
++| 00691762 | 当代科学中的哲学问题 | 2 |
++| 00691882 | 简明世界环境史 | 2 |
++| 00691991 | 分支科学哲学前沿 | 1 |
++| 00692001 | 生命科学史与哲学 | 1 |
++| 00692082 | 中国近现代科技史 | 2 |
++| 00701803 | 战略武器技术与国际安全 | 3 |
++| 00920021 | 漫游在物理和天文的交叉领域 | 1 |
++| 00920031 | 天问：宇宙之美 | 1 |
++| 00920043 | 观测宇宙学：从太阳系走向宇宙深处 | 3 |
++| 00920052 | 天体物理概论 | 2 |
++| 00930012 | 探索未来城市：智慧、韧性与可持续 | 2 |
++| 00930052 | 口岸生物安全 | 2 |
++| 00960012 | 地球、环境与人类社会和人类健康 | 2 |
++| 00960042 | 医疗健康AI导论：告别繁琐的数学公式 | 2 |
++| 00990021 | 绿色建筑与可持续发展 | 1 |
++| 01010012 | 化学简史 | 2 |
++| 01030212 | 工程创新导论 | 2 |
++| 01510022 | 工业系统概论 | 2 |
++| 01510152 | 现代加工技术与实践 | 2 |
++| 01510162 | 制造工程体验 | 2 |
++| 01510172 | 创意设计与制造 | 2 |
++| 01510243 | 大数据与机器智能 | 3 |
++| 01510272 | 技术创新方法与实践 | 2 |
++| 01510292 | 个性化3D设计与实现 | 2 |
++| 01510472 | 智慧医疗创新体验 | 2 |
++| 01510482 | 能源技术创新与实践 | 2 |
++| 01510492 | 能源与社会 | 2 |
++| 01510502 | 智能制造实践 | 2 |
++| 01510522 | 智能工厂创新体验 | 2 |
++| 01510573 | 智慧医疗专业创新实践 | 3 |
++| 01510583 | 智慧城市专业创新实践 | 3 |
++| 01510592 | 手工制作创新实践 | 2 |
++| 01510613 | 人工智能产品创新实践 | 3 |
++| 01510633 | 人文创意与工程实践 | 3 |
++| 01510652 | 工业互联网与社会 | 2 |
++| 01510663 | 机器人专业创新实践（设计方法） | 3 |
++| 01510693 | 机器人专业创新实践（原型制作） | 3 |
++| 01510732 | 仿生学探索与实践 | 2 |
++| 01510742 | 智能电子产品创新实践 | 2 |
++| 01510762 | 机器人应用与制作体验 | 2 |
++| 01510803 | 智慧能源技术与创新 | 3 |
++| 01510813 | 智能交通创新实践 | 3 |
++| 01510832 | 生命科技前沿与产业创新 | 2 |
++| 04000061 | 传统与现代：中医药科学研究进展 | 1 |
++| 04000083 | 肿瘤生物学概论 | 3 |
++| 04000112 | 走近医学 | 2 |
++| 04000122 | 人体胚胎学的奥妙 | 2 |
++| 04000132 | 神奇的免疫 | 2 |
++| 04000142 | 医学学科概览 | 2 |
++| 04000151 | 脑科学与人工智能的对话：基础与前沿 | 1 |
++| 04000172 | 转化医学工程 | 2 |
++| 04000182 | 人体奥秘 | 2 |
++| 04000262 | 认识疾病 | 2 |
++| 04000282 | 疫苗的力量 | 2 |
++| 04000301 | 灾难医学与急救知识 | 1 |
++| 04000322 | 客从何处来-进化和演化 | 2 |
++| 04000342 | 健康医疗数据科学 | 2 |
++| 04000352 | 形意运动与健康 | 2 |
++| 04020032 | 解码衰老 | 2 |
++| 04050022 | 心脑共健，提高健康素养 | 2 |
++| 04050032 | 循证医学基础理论与实践 | 2 |
++| 04050042 | 生死契约——器官移植的前世今生 | 2 |
++| 04050052 | 临床脑科学前沿探索 | 2 |
++| 04050062 | 转化医学 | 2 |
++| 04050071 | 科技赋能生命：急诊医学与人类社会的未来 | 1 |
++| 04100012 | 算法设计及其复杂性分析 | 2 |
++| 04100041 | 大数据技术导论 | 1 |
++| 04150013 | 航空宇航工程全过程设计 | 3 |
++| 04730013 | 工程认知与创新实践 | 3 |
++| 05010012 | 脑与智能 | 2 |
++| 10000052 | 中国城市规划史 | 2 |
++| 10000072 | 环境可持续性与可再生能源 | 2 |
++| 10000082 | 室内环境与健康 | 2 |
++| 10000152 | 建筑节能与低碳导论 | 2 |
++| 10030032 | 工程建设与社会发展 | 2 |
++| 10030042 | 可持续工程创新与实践 | 2 |
++| 10040012 | 公共工程（水利）的社会文化影响 | 2 |
++| 10050012 | 理论与实践：空气 | 2 |
++| 10050022 | 全球生态环境展望 | 2 |
++| 10140012 | 走近核电 | 2 |
++| 10160022 | 以用户为中心的交互设计 | 2 |
++| 10160032 | 数字时代的系统化设计思维 | 2 |
++| 10220042 | 透视能源新视角 | 2 |
++| 10240022 | 计算机科学基础 | 2 |
++| 10240032 | 网络时代的信息化素养 | 2 |
++| 10240042 | 计算机网络基础 | 2 |
++| 10260011 | 纳米技术在现实生活中的应用 | 1 |
++| 10260022 | 智能传感在社会生活中的应用 | 2 |
++| 10260031 | 电池发明与微型储能器件 | 1 |
++| 10260042 | 从智能感知到物联网 | 2 |
++| 10260062 | 从算盘到量子计算机 | 2 |
++| 10310082 | 改变世界的“力” | 2 |
++| 10340032 | 魅力化学化工 | 2 |
++| 10440192 | 柔性电子与可穿戴设备 | 2 |
++| 10450082 | 多学科技术交叉与生命科学前沿 | 2 |
++| 10450092 | 蛋白质与生命 | 2 |
++| 10450101 | 癌症与社会 | 1 |
++| 10460013 | 气象万千--大气科学基础 | 3 |
++| 10460032 | 全球气候变化 | 2 |
++| 10460043 | 可持续性科学 | 3 |
++| 10691203 | 科学革命 | 3 |
++| 11030032 | 工程伦理 | 2 |
++| 11510013 | 制造工程实践 | 3 |
++| 11510023 | 工业系统基础 | 3 |
++| 11510042 | 人工智能思维 | 2 |
++| 11510052 | 工业生产概论 | 2 |
++| 11510062 | 人工智能产业导引 | 2 |
++| 14000042 | 神奇的大脑 | 2 |
++| 14000072 | 疯狂的细胞 | 2 |
++| 14100012 | 互联网科技创新及其工业应用 | 2 |
++| 14100042 | 创意软件 | 2 |
++| 14720072 | 基础生命科学 | 2 |
++| 14730012 | 未央书院工程导论 | 2 |
++| 30030622 | 数学建模和数据分析 | 2 |
+diff --git a/prototype.md b/prototype.md
+index 4b75a62..d571bb5 100644
+--- a/prototype.md
++++ b/prototype.md
+@@ -529,3 +529,137 @@ F4（课程查询）      ──→ F2 完成后开始，数据收集全程同
+ | `HOST` | 后端监听地址 | `0.0.0.0` |
+ | `PORT` | 后端监听端口 | `8000` |
+ | `DEBUG` | 调试模式 | `false` |
++
++
++---
++
++## 附录：通识选修课组分析详细设计
++
++### 背景
++
++未央书院通识选修课采用**四大课组**体系，与其他院系不同的特殊要求：
++
++> "通识选修课11学分，未央书院通识选修课要求包括人文、社科、艺术、科学四大课组，要求学生**科学课组至少修3个学分**，其余三个课组**每个至少修2学分**。"
++
++### 课组学分配置
++
++| 课组 | 配置键 | 最低学分 | 课程数据源 | 特殊说明 |
++|------|--------|---------|-----------|---------|
++| 🔬 科学课组 | `science` | **3.0** | `generalEdu/science.md` | ⚠️ 注意：比其他课组多1学分！ |
++| 📚 人文课组 | `humanities` | 2.0 | `generalEdu/Humanities.md` | 含必修《科技与人文研讨课》（1学分） |
++| 🏛️ 社科课组 | `social` | 2.0 | `generalEdu/Social.md` | 社会科学类课程 |
++| 🎨 艺术课组 | `art` | 2.0 | `generalEdu/Art.md` | 音乐、美术、戏剧等 |
++
++**总要求**: 11学分 = (3+2+2+2) 最低要求 + 额外2学分
++
++### 实现代码
++
++文件: `backend/services/general_edu_service.py`
++
++```python
++class GeneralEduService:
++    """通识选修课服务"""
++    
++    # ⚠️ 重要：科学课组是3学分，其他是2学分
++    GROUP_CONFIG = {
++        'science': {
++            'name': '科学课组',
++            'file': 'science.md',
++            'min_credits': 3.0,  # 未央书院特殊要求
++        },
++        'humanities': {
++            'name': '人文课组',
++            'file': 'Humanities.md',
++            'min_credits': 2.0,
++        },
++        'social': {
++            'name': '社科课组',
++            'file': 'Social.md',
++            'min_credits': 2.0,
++        },
++        'art': {
++            'name': '艺术课组',
++            'file': 'Art.md',
++            'min_credits': 2.0,
++        },
++    }
++    
++    TOTAL_REQUIRED_CREDITS = 11.0
++```
++
++### 课程匹配逻辑
++
++```python
++def analyze_completion(self, completed_courses):
++    for group_key, config in self.GROUP_CONFIG.items():
++        group_courses = self._group_courses.get(group_key, [])
++        
++        for course in completed_courses:
++            # 1. 课程号精确匹配（清洗引号）
++            if course_code and ge_course.code == course_code:
++                is_in_group = True
++                
++            # 2. 课程名模糊匹配（双向包含）
++            if course_name and (ge_course.name in course_name 
++                               or course_name in ge_course.name):
++                is_in_group = True
++            
++            if is_in_group and course.get('is_passed', True):
++                earned_credits += course_credits
++```
++
++### 常见问题与修复
++
++**Bug 1: 科学课组学分计算错误**
++- 症状：科学课组显示已完成（2学分），但系统提示还需1学分
++- 原因：`min_credits` 被错误设置为 2.0 而不是 3.0
++- 修复：确保 `GROUP_CONFIG['science']['min_credits'] = 3.0`
++
++**Bug 2: 课程匹配失败**
++- 症状：已修通识课未被识别到对应课组
++- 原因：课程号格式不一致（如带引号 `'00000011'` vs `00000011`）
++- 修复：匹配时清洗课程号 `code.replace("'", "").replace('"', '')`
++
++**Bug 3: 未通过课程被计入**
++- 症状：挂科的通识课被算入已完成学分
++- 修复：检查 `course.get('is_passed', True)` 只统计通过课程
++
++### 分析输出示例
++
++```json
++{
++  "general_edu_analysis": {
++    "total_required": 11.0,
++    "total_earned": 8.0,
++    "total_missing": 3.0,
++    "all_groups_complete": false,
++    "groups": [
++      {
++        "group_name": "科学课组",
++        "group_key": "science",
++        "credits_required": 3.0,
++        "credits_earned": 2.0,
++        "credits_missing": 1.0,
++        "is_complete": false,
++        "completed_courses": [{"name": "人工智能与未来交通", "credits": 2.0}]
++      },
++      {
++        "group_name": "人文课组",
++        "group_key": "humanities",
++        "credits_required": 2.0,
++        "credits_earned": 3.0,
++        "credits_missing": 0.0,
++        "is_complete": true,
++        "completed_courses": [{"name": "科技与人文研讨课", "credits": 1.0}, ...]
++      }
++    ]
++  }
++}
++```
++
++### 相关文件
++
++- `backend/services/general_edu_service.py` - 通识课分析核心服务
++- `backend/services/general_edu_recommendation.py` - 通识课推荐引擎
++- `backend/agent/general_edu_tools.py` - Agent 工具函数
++- `generalEdu/*.md` - 四大课组课程清单（共 700+ 门课程）
+diff --git a/scripts/test_general_edu.py b/scripts/test_general_edu.py
+new file mode 100644
+index 0000000..2654dbd
+--- /dev/null
++++ b/scripts/test_general_edu.py
+@@ -0,0 +1,100 @@
++"""测试通识选修课服务"""
++
++from pathlib import Path
++import sys
++sys.path.insert(0, str(Path(__file__).parent.parent))
++
++from backend.services.general_edu_service import (
++    get_general_edu_service,
++    analyze_general_edu_completion,
++    generate_general_edu_report,
++)
++from backend.services.general_edu_recommendation import (
++    recommend_general_edu_courses,
++    analyze_general_edu_gaps,
++)
++
++
++def test_service():
++    """测试通识课服务"""
++    print("=" * 60)
++    print("测试通识选修课服务")
++    print("=" * 60)
++    
++    # 1. 测试课程加载
++    print("\n1. 测试课程加载")
++    service = get_general_edu_service()
++    
++    for group_key in ['science', 'humanities', 'social', 'art']:
++        courses = service.get_group_courses(group_key)
++        print(f"  {group_key}: 加载了 {len(courses)} 门课程")
++    
++    all_courses = service.get_all_courses()
++    print(f"  总计: {len(all_courses)} 门课程")
++    
++    # 2. 测试课程查询
++    print("\n2. 测试课程查询")
++    course = service.find_course_by_code("00240342")
++    if course:
++        print(f"  查找课程号 00240342: {course.name} ({course.group})")
++    
++    course = service.find_course_by_name("数据科学导论")
++    if course:
++        print(f"  查找'数据科学导论': {course.code} ({course.group})")
++    
++    # 3. 测试完成情况分析
++    print("\n3. 测试完成情况分析")
++    
++    # 模拟已修课程
++    completed_courses = [
++        {"code": "00240342", "name": "数据科学导论", "credits": 2.0, "grade": "A-", "is_passed": True},
++        {"code": "00240362", "name": "计算思维", "credits": 2.0, "grade": "B+", "is_passed": True},
++        {"code": "00690622", "name": "中国古典诗歌研究与赏析", "credits": 2.0, "grade": "A", "is_passed": True},
++        {"code": "00780051", "name": "舞蹈欣赏与实践", "credits": 1.0, "grade": "P", "is_passed": True},
++        {"code": "00510133", "name": "会计学原理", "credits": 3.0, "grade": "B", "is_passed": True},
++    ]
++    
++    result = analyze_general_edu_completion(completed_courses)
++    
++    print(f"  总学分要求: {result['total_required']}")
++    print(f"  已修学分: {result['total_earned']}")
++    print(f"  剩余学分: {result['total_missing']}")
++    print(f"  所有课组完成: {result['all_groups_complete']}")
++    
++    print("\n  各课组完成情况:")
++    for group in result['groups']:
++        status = "[完成]" if group['is_complete'] else "[未完成]"
++        print(f"    {status} {group['group_name']}: {group['credits_earned']}/{group['credits_required']} 学分")
++    
++    # 4. 测试缺口分析
++    print("\n4. 测试缺口分析")
++    gaps = analyze_general_edu_gaps(completed_courses)
++    print(f"  未完成课组数: {len(gaps['incomplete_groups'])}")
++    for g in gaps['incomplete_groups']:
++        print(f"    - {g['group_name']}: 还差 {g['credits_missing']} 学分")
++    
++    # 5. 测试推荐功能
++    print("\n5. 测试推荐功能")
++    recommendations = recommend_general_edu_courses(
++        completed_courses,
++        user_preferences={"interests": ["人工智能", "数据"]}
++    )
++    print(f"  推荐课程数: {recommendations['total_count']}")
++    for rec in recommendations['recommendations'][:5]:
++        print(f"    - {rec['course_name']} ({rec['group_name']}, 评分: {rec['rating']:.1f})")
++    
++    # 6. 生成报告
++    print("\n6. 生成分析报告")
++    report = generate_general_edu_report(completed_courses)
++    # 保存到文件
++    output_file = Path(__file__).parent / "test_general_edu_output.md"
++    output_file.write_text(report, encoding='utf-8')
++    print(f"  报告已保存到: {output_file}")
++    
++    print("\n" + "=" * 60)
++    print("测试完成!")
++    print("=" * 60)
++
++
++if __name__ == "__main__":
++    test_service()
+-- 
+2.45.1.windows.1
+

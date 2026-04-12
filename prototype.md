@@ -1,665 +1,1040 @@
-# 未央书院选课助手智能体 — 原型设计文档
+# 智能选课助手系统 (Smart Course Advisor) - Prototype Design
 
-## 一、项目概述
+**版本**: v0.1   
 
-面向未央书院学生的智能学业规划助手。用户通过**多轮对话**完成以下流程：上传成绩单 PDF → 自动解析并对比培养方案 → 生成缺口分析报告 → 交互式选课推荐 → 课程详情查询。整体体验类似于网页版 DeepSeek 的对话式交互。
-
-### 核心功能
-
-| # | 功能 | 描述 | 当前状态 |
-|---|------|------|---------|
-| F1 | 培养方案缺口分析 | 上传成绩单 PDF，系统自动识别年级班级，OCR 提取后对比培养方案，生成缺口报告 | 已实现（单轮 API + 自动信息识别），待升级为结构化分析 |
-| F2 | 多轮对话式交互 | 将 F1 及后续功能整合到统一聊天界面，支持流式输出 | 待开发 |
-| F3 | 智能选课推荐 | 基于缺口分析 + 先修链分析 + 用户偏好，推荐下学期可选课程 | 待开发 |
-| F4 | 课程信息查询 | 查询课程的开课学期、考试形式、作业要求等 | 待开发（需数据源） |
-| F5 | PDF 缓存 | 对已解析过的 PDF（MD5 匹配）跳过 OCR，直接返回缓存结果 | 待开发 |
-
-### 技术创新点（答辩亮点）
-
-以下是本项目与同类竞品的核心差异，也是其他团队短期内难以复制的壁垒：
-
-| 创新点 | 别人的做法 | 我们的做法 | 为什么别人难做 |
-|--------|-----------|-----------|--------------|
-| **结构化精确分析** | 把文本整段丢给 LLM，让 LLM "算"学分差，结果不可验证 | 培养方案和成绩单先解析为结构化数据（课程树 / 课程列表），**代码层面精确计算学分**，LLM 只负责生成自然语言报告 | 需要针对培养方案 Markdown 格式写专门的解析器，针对 OCR 输出的成绩单格式写结构化提取逻辑，这属于脏活累活 |
-| **先修链拓扑排序** | 推荐只看"你缺什么课"，不考虑课程之间的依赖关系 | 构建课程先修依赖图，计算每门课的"阻塞系数"（不修它会导致多少后续课无法选修），据此排优先级 | 需要手动收集并维护先修关系数据，需要实现图算法 |
-| **课程知识图谱数据** | 最多做到查课表信息 | 积累了一份结构化的课程详情数据（开课学期、考核方式、工作量、先修关系），覆盖核心课程 | 数据收集本身是时间壁垒，别人短期内无法获得同等规模的结构化课程数据 |
+**状态**: 概念验证阶段
 
 ---
 
-## 二、目标项目结构
 
-```text
-Agent_competition/
-├── README.md
-├── .env.example
-├── .gitignore
-├── pyproject.toml
-├── prototype.md                    # 本文件
-│
-├── backend/
-│   ├── __init__.py
-│   ├── main.py                     # FastAPI 入口，挂载路由与中间件
-│   ├── config.py                   # pydantic-settings 配置管理
-│   │
-│   ├── api/                        # API 路由层
-│   │   ├── __init__.py
-│   │   ├── deps.py                 # 依赖注入
-│   │   └── routes/
-│   │       ├── __init__.py
-│   │       ├── health.py           # GET /health
-│   │       ├── advise.py           # POST /api/advise/gap-analysis（保留单轮接口）
-│   │       └── chat.py             # [F2] POST /api/chat — 对话式交互入口（SSE 流式）
-│   │
-│   ├── agent/                      # LangGraph 智能体编排
-│   │   ├── __init__.py
-│   │   ├── graph.py                # 状态图：extract_transcript → load_schema → analyze_gap
-│   │   ├── chat_graph.py           # [F2] 多轮对话状态图（含意图路由）
-│   │   ├── runner.py               # 单轮分析入口（供 advise 路由调用）
-│   │   ├── tools.py                # Agent 可调用工具（OCR、方案加载、课程查询等）
-│   │   └── prompts.py              # 系统提示词与模板
-│   │
-│   ├── services/                   # 业务逻辑（不依赖 HTTP，便于单测）
-│   │   ├── __init__.py
-│   │   ├── graduation.py           # 培养方案加载 + 结构化解析（Markdown → 课程树）
-│   │   ├── transcript_parser.py    # 【创新】成绩单结构化解析（OCR 文本 → 课程列表）
-│   │   ├── gap_calculator.py       # 【创新】精确缺口计算（代码计算学分，非 LLM 估算）
-│   │   ├── prerequisite_graph.py   # 【创新】先修链分析与拓扑排序
-│   │   ├── ocr_service.py          # OCR 云端服务（PaddleOCR API，自动回退本地）
-│   │   ├── ocr_service_local.py    # 本地 OCR（PaddleOCR + pdf2image）
-│   │   ├── llm_service.py          # DeepSeek API 封装（OpenAI 兼容，支持流式）
-│   │   ├── cache_service.py        # [F5] PDF MD5 缓存服务
-│   │   ├── course_info.py          # [F4] 课程信息查询服务
-│   │   └── recommendation.py       # [F3] 选课推荐（结合先修链优先级 + 用户偏好）
-│   │
-│   ├── schemas/                    # Pydantic 请求/响应模型
-│   │   ├── __init__.py
-│   │   └── advise.py
-│   │
-│   ├── data/                       # 结构化数据文件
-│   │   ├── DegreeRequirements/     # 培养方案 Markdown（2021-2025 级）
-│   │   │   ├── 2021未央书院培养方案.md
-│   │   │   ├── 2022未央书院培养方案.md
-│   │   │   ├── 2023未央书院培养方案.md
-│   │   │   ├── 2024未央书院培养方案.md
-│   │   │   └── 2025未央书院培养方案.md
-│   │   └── courses/                # [F3/F4] 课程信息数据（JSON）
-│   │       ├── course_schedule.json    # 开课学期、学分、课组归属
-│   │       ├── prerequisites.json     # 【创新】课程先修关系（构建依赖图的输入）
-│   │       └── course_details.json     # 考核方式、作业要求等（逐步补充）
-│   │
-│   ├── cache/                      # [F5] OCR 结果缓存目录
-│   │   └── {md5hash}.md
-│   │
-│   ├── paddleocr_doc_parsing/      # PaddleOCR 文档解析库
-│   └── utils/
-│       └── file_utils.py           # 文件工具函数
-│
-├── frontend/
-│   ├── react-app/                  # React 前端（主力，需改造为聊天界面）
-│   │   ├── package.json
-│   │   └── src/
-│   │       ├── App.tsx
-│   │       ├── components/
-│   │       │   ├── Layout.tsx          # 页面主布局
-│   │       │   ├── Hero.tsx            # 首页 Hero 区域
-│   │       │   ├── UploadForm.tsx      # 成绩单上传表单（自动识别年级班级）
-│   │       │   ├── ResultDisplay.tsx   # 分析结果展示
-│   │       │   └── ...
-│   │       ├── pages/
-│   │       │   └── ChatPage.tsx        # [F2] 对话页面（替代原 HomePage）
-│   │       ├── api/
-│   │       │   └── client.ts           # 后端 API 客户端（含 SSE 流式解析）
-│   │       └── types/
-│   │           └── index.ts
-│   └── streamlit_app/              # Streamlit 前端（备选，功能同步）
-│       ├── app.py
-│       ├── config.py
-│       └── api_client.py
-│
-├── scripts/
-│   ├── test_ocr.py
-│   └── test_ocr_api.py
-│
-└── tests/                          # 单元测试
-    ├── conftest.py
-    ├── test_graduation_service.py
-    ├── test_cache_service.py
-    └── test_agent_tools.py
-```
+
+## 1. 项目概述
+
+### 1.1 问题定义
+
+大学选课场景中存在以下痛点：
+
+- **信息过载**：数千门课程、多维度分类（院系/通识/模块）、海量历史评价
+- **约束复杂**：培养方案硬性要求（学分/先修课/模块）、时间冲突、容量限制
+- **需求模糊**：学生常使用自然语言提问（如"给分好的数理基础课"），难以映射到结构化查询
+- **个性化冲突**：需平衡"毕业紧迫性"与"课程质量偏好"
+
+### 1.2 核心目标
+
+构建一个**混合架构的Agent系统**，能够：
+
+1. 理解自然语言查询意图（LLM层）
+2. 精确执行培养方案约束检查（硬编码层）
+3. 基于历史评分数据生成个性化推荐（数据引擎层）
+4. 提供可解释的选课建议（LLM增强层）
 
 ---
 
-## 三、功能详细设计
 
-### F1 — 培养方案缺口分析
 
-#### 当前实现
+## 2. 系统架构
 
-单轮 API 模式：`POST /api/advise/gap-analysis`，上传成绩单 PDF 后，系统先通过 OCR 提取文本并自动识别入学年份和班级，然后 LangGraph 状态图依次执行 `extract_transcript → load_schema → analyze_gap`，由 LLM 直接对比分析。**保留此接口**，同时作为 F2 多轮对话中的后端能力被内部调用。
-
-#### 升级方向：结构化精确分析（技术创新）
-
-当前 LLM 直接对比原始文本，学分计算完全依赖 LLM 的"理解"，结果不可验证、不可复现。升级为**结构化解析 + 代码精确计算 + LLM 仅生成报告**的三段式流程：
+### 2.1 分层架构图
 
 ```
-                    当前做法                              升级后做法
-            ┌─────────────────┐                ┌─────────────────────────┐
-            │ OCR 文本（整段） │                │ OCR 文本（整段）         │
-            │       +         │                │       +                 │
-            │ 培养方案（整段） │                │ 培养方案（整段）         │
-            │       ↓         │                │       ↓                 │
-            │  全部丢给 LLM   │       →        │  [结构化解析]            │
-            │  LLM 自己算学分 │                │  成绩单 → 课程列表       │
-            │  LLM 自己找缺口 │                │  培养方案 → 课程树       │
-            │       ↓         │                │       ↓                 │
-            │  返回分析报告    │                │  [代码精确计算]          │
-            └─────────────────┘                │  学分差、完成率、缺课    │
-                                               │       ↓                 │
-                                               │  [LLM 生成报告]         │
-                                               │  输入：结构化数据        │
-                                               │  输出：自然语言报告      │
-                                               └─────────────────────────┘
+
+
+
+┌─────────────────────────────────────────────────────────────────┐
+
+│                    交互层 (Interface Layer)                        │
+
+│  • 自然语言对话接口                                               │
+
+│  • 培养方案上传解析                                               │
+
+│  • 课表可视化展示                                                 │
+
+└──────────────────────┬──────────────────────────────────────────┘
+
+│
+
+┌──────────────────────▼──────────────────────────────────────────┐
+
+│                    意图层 (Intent Layer) - LLM驱动               │
+
+│  • Query Router: 将用户查询分类为实体查询/聚合统计/语义探索/复杂推理 │
+
+│  • 查询改写: "张三的课" → {teacher: "张三"}                       │
+
+│  • 培养方案文本解析: PDF/Word → 结构化规则                         │
+
+└──────────────────────┬──────────────────────────────────────────┘
+
+│
+
+┌──────────────────────▼──────────────────────────────────────────┐
+
+│                    引擎层 (Engine Layer) - 硬编码核心              │
+
+│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────────┐  │
+
+│  │  约束引擎        │  │  推荐引擎        │  │  评分聚合引擎     │  │
+
+│  │  • 缺口计算      │  │  • 候选集生成    │  │  • 历史数据挖掘   │  │
+
+│  │  • 先修课检查    │  │  • 多目标排序    │  │  • 情感分析      │  │
+
+│  │  • 冲突检测      │  │  • 课表优化(ILP) │  │  • 教师维度区分   │  │
+
+│  └─────────────────┘  └─────────────────┘  └──────────────────┘  │
+
+└──────────────────────┬──────────────────────────────────────────┘
+
+│
+
+┌──────────────────────▼──────────────────────────────────────────┐
+
+│                    存储层 (Storage Layer) - 混合数据库            │
+
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐ │
+
+│  │ PostgreSQL   │  │  Milvus/     │  │ Neo4j                   │ │
+
+│  │ (关系型)      │  │  pgvector    │  │ (图数据库)              │ │
+
+│  │ • 课程元数据  │  │ (向量)        │  │ • 培养方案DAG           │ │
+
+│  │ • 用户进度    │  │ • 语义搜索    │  │ • 先修课依赖            │ │
+
+│  │ • 评分聚合    │  │ • 相似度计算  │  │ • 教师-课程关系         │ │
+
+│  └──────────────┘  └──────────────┘  └──────────────────────────┘ │
+
+└───────────────────────────────────────────────────────────────────┘
+
+
+
 ```
 
-**关键模块拆分：**
+### 2.2 职责边界划分
 
-**1) `services/graduation.py` — 培养方案结构化解析**
 
-将培养方案 Markdown 解析为结构化课程树：
+| 模块类型      | 实现方式              | 典型任务                    | 性能要求        |
+| --------- | ----------------- | ----------------------- | ----------- |
+| **硬编码**   | Python/SQL/Cypher | 学分计算、先修课检查、时间冲突检测、ILP优化 | P99 < 50ms  |
+| **LLM增强** | GPT-4/Claude/Kimi | 意图识别、查询改写、推荐理由生成、评价情感分析 | P95 < 2s    |
+| **混合协作**  | LLM作为重排序器         | 在硬编码Top50候选基础上进行语义精排    | P95 < 500ms |
+
+
+---
+
+
+
+## 3. 数据模型设计
+
+### 3.1 关系型模型 (PostgreSQL)
+
+**核心实体表**
+
+```sql
+
+-- 课程基础信息
+
+CREATE TABLE courses (
+
+    course_id VARCHAR(20) PRIMARY KEY,
+
+    code VARCHAR(20),
+
+    title VARCHAR(200),
+
+    credits INT,
+
+    department VARCHAR(50),
+
+    category VARCHAR(50),        -- 专业必修/专业选修/通识/数理基础
+
+    description TEXT,
+
+    workload_hours INT,           -- 每周学时
+
+    tags TEXT[]                 -- GIN索引支持的多标签
+
+);
+
+
+
+-- 开课实例（区分学期和教师）
+
+CREATE TABLE course_offerings (
+
+    offering_id VARCHAR(20) PRIMARY KEY,
+
+    course_id VARCHAR(20),
+
+    teacher_id VARCHAR(20),
+
+    semester VARCHAR(20),        -- 2024-Spring
+
+    schedule_slots JSONB,        -- [{day: "Mon", start: "08:00", end: "09:35"}]
+
+    capacity INT,
+
+    location VARCHAR(50),
+
+    FOREIGN KEY (course_id) REFERENCES courses(course_id)
+
+);
+
+
+
+-- 用户完成进度（与培养方案绑定）
+
+CREATE TABLE user_progress (
+
+    user_id VARCHAR(20),
+
+    program_id VARCHAR(20),
+
+    group_id VARCHAR(20),        -- 培养方案模块ID
+
+    required_credits INT,
+
+    completed_credits INT DEFAULT 0,
+
+    completed_courses TEXT[],    -- PostgreSQL数组
+
+    in_progress_courses TEXT[],
+
+    PRIMARY KEY (user_id, group_id)
+
+);
+
+
+
+-- 评分聚合（物化视图，每小时刷新）
+
+CREATE MATERIALIZED VIEW course_rating_stats AS
+
+SELECT 
+
+    co.course_id,
+
+    co.teacher_id,
+
+    AVG(r.quality_score) as avg_quality,
+
+    AVG(r.difficulty_score) as avg_difficulty,
+
+    COUNT(r.review_id) as review_count,
+
+    PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY r.quality_score) as median_quality
+
+FROM course_offerings co
+
+LEFT JOIN reviews r ON co.offering_id = r.offering_id
+
+GROUP BY co.course_id, co.teacher_id;
+
+```
+
+### 3.2 向量模型 (Milvus/pgvector)
 
 ```python
-# 解析结果数据结构示例
-{
-    "year": "2023",
-    "total_credits_required": 170,
-    "groups": [
-        {
-            "group_name": "通识教育",
-            "credits_required": 40,
-            "sub_groups": [
-                {
-                    "group_name": "通识基础课",
-                    "credits_required": 20,
-                    "courses": [
-                        {"code": "10720111", "name": "线性代数(1)", "credits": 4, "required": True},
-                        ...
-                    ]
-                }
-            ]
-        },
-        {
-            "group_name": "专业核心课",
-            "credits_required": 50,
-            "courses": [...]
+
+# 课程复合向量表示
+
+course_vectors = [
+
+    {
+
+        "course_id": "CS202",
+
+        "description_vector": [...],      # 课程描述Embedding (bge-m3)
+
+        "syllabus_vector": [...],          # 教学大纲Embedding
+
+        "reviews_summary_vector": [...],   # 评价摘要Embedding（捕捉"硬核"、"水课"等）
+
+        "prerequisites_vector": [...],     # 能力要求Embedding
+
+        "metadata": {
+
+            "department": "计算机系",
+
+            "category": "专业核心",
+
+            "avg_quality": 4.6
+
         }
-    ]
-}
-```
 
-解析策略：针对培养方案 Markdown 的格式特征（标题层级、表格结构、学分标注），编写正则 + 规则解析器。不同年份的培养方案格式可能不同，需要逐年级适配或编写通用规则。
-
-**2) `services/transcript_parser.py` — 成绩单结构化解析**
-
-将 OCR 输出的成绩单文本解析为已修课程列表：
-
-```python
-# 解析结果数据结构示例
-[
-    {"code": "10720111", "name": "线性代数(1)", "credits": 4, "grade": "A-", "semester": "2023秋"},
-    {"code": "40130343", "name": "数据结构", "credits": 3, "grade": "B+", "semester": "2024春"},
-    ...
-]
-```
-
-解析策略：OCR 输出的成绩单通常是表格格式（课程号 | 课程名 | 学分 | 成绩 | 学期），按行解析。需处理 OCR 识别错误（如把 "A-" 识别成 "A -"）。
-
-此外，`transcript_parser.py` 还负责**自动提取学生的年级和班级信息**（如从 `2023年08月入学` 提取年份，从 `未央-电31` 提取班级），使用正则匹配成绩单中的固定字段，无需用户手动输入。
-
-**3) `services/gap_calculator.py` — 精确缺口计算**
-
-输入结构化的课程树 + 已修课程列表，输出精确的缺口分析：
-
-```python
-# 输出示例
-{
-    "total_credits_required": 170,
-    "total_credits_earned": 142,
-    "completion_rate": 0.835,           # 精确到小数的完成率
-    "group_gaps": [
-        {
-            "group_name": "通识基础课",
-            "credits_required": 20,
-            "credits_earned": 18,
-            "missing_courses": [
-                {"code": "...", "name": "思政课xx", "credits": 2}
-            ]
-        },
-        ...
-    ],
-    "missing_required": [...],          # 未修的必修课
-    "elective_deficit": 4,              # 选修课还差多少学分
-}
-```
-
-全部由 Python 代码计算（集合运算、学分累加），不经过 LLM，结果确定性、可单测。
-
-**4) LLM 的角色变化**
-
-LLM 不再负责"算"学分，改为：
-- 接收 `gap_calculator.py` 输出的结构化缺口数据
-- 结合用户的具体情况（班级、年级）生成自然语言的分析报告
-- 给出选课建议和学习规划
-
-**这样做的好处（答辩话术）：**
-
-> "我们的缺口分析是确定性的——同一份成绩单分析两次结果完全一致。学分计算、课组匹配全部由代码完成，LLM 只负责把结构化数据翻译成用户看得懂的报告。这意味着分析结果是可验证、可复现的，不会因为 LLM 的随机性而产生不同的结论。"
-
----
-
-### F2 — 多轮对话式交互
-
-#### 交互设计
-
-用户看到的界面类似网页版 DeepSeek：左侧对话历史列表，右侧当前对话的消息流。
-
-**典型对话流程：**
-
-```
-用户：[上传 成绩单.pdf] 帮我分析一下我的培养方案完成情况
-
-助手：成绩单上传成功！我已自动识别您为未央-电31（2023级）。
-      [流式输出] 培养方案缺口分析报告（Markdown 渲染）
-      ---
-      你目前缺少以下课程：...
-      你是否需要我帮你推荐下学期的选课？
-
-用户：需要的，我比较喜欢软件类课程
-
-助手：根据你的缺口和偏好，我推荐以下课程：
-      1. xxx — 秋季开课，3学分...
-      2. yyy — 春季开课，2学分...
-
-用户：xxx 这门课考试多吗？有没有大作业？
-
-助手：xxx 这门课：
-      - 开课学期：秋季
-      - 考核方式：期中 + 期末考试
-      - 大作业：有（团队项目 + Presentation）
-      ...
-```
-
-#### 技术方案
-
-| 层 | 方案 |
-|----|------|
-| **后端 API** | 新增 `POST /api/chat`，接收 `{ session_id, message }`，成绩单通过 `POST /api/chat/upload` 上传，返回 SSE 流式响应 |
-| **Agent 编排** | 新建 `chat_graph.py`，基于 LangGraph 的多轮状态图，支持意图路由（上传文件 / 问课程 / 要推荐 / 自由对话） |
-| **会话状态** | 内存 dict 或 Redis，按 `session_id` 存储聊天历史 + 缺口分析结果 + 用户偏好 |
-| **流式输出** | DeepSeek API 开启 `stream=True`，后端用 `StreamingResponse` 逐 token 推送到前端 |
-| **前端 UI** | React 端改造为聊天界面：消息列表 + 底部输入框 + 文件上传入口，前端用 `fetch` + `ReadableStream` 解析 SSE |
-
-#### 意图路由设计
-
-```
-用户消息 / 文件上传
-  ↓
-[LLM 意图识别]
-  ├─ 上传文件 → 自动识别年级班级，触发 F1 缺口分析流程（OCR + 对比）
-  ├─ 请求推荐 → 触发 F3 选课推荐
-  ├─ 查询课程 → 触发 F4 课程信息查询
-  └─ 自由对话 → LLM 直接回复（带上下文）
-```
-
----
-
-### F3 — 智能选课推荐
-
-#### 触发方式
-
-缺口分析完成后 Agent 主动询问，或用户在对话中主动请求。
-
-#### 推荐依据
-
-| 数据来源 | 用途 |
-|----------|------|
-| 缺口分析结果（F1 结构化输出） | 精确知道用户缺哪些课组、差多少学分、哪些必修课未修 |
-| 用户偏好（对话中提取） | 如"喜欢软件类"、"想选水课"等倾向 |
-| `course_schedule.json` | 课程的开课学期、学分、课组归属 |
-| `prerequisites.json` | 课程先修关系（构建依赖图） |
-| 培养方案结构化数据 | 各课组的学分要求 |
-
-#### 核心创新：先修链拓扑分析
-
-`services/prerequisite_graph.py` 负责构建课程依赖图并计算推荐优先级。
-
-**数据格式** `data/courses/prerequisites.json`：
-```json
-[
-  {"course": "数据结构", "prerequisites": ["程序设计基础"]},
-  {"course": "操作系统", "prerequisites": ["数据结构", "计算机组成原理"]},
-  {"course": "编译原理", "prerequisites": ["数据结构"]},
-  {"course": "数据库系统", "prerequisites": ["数据结构"]},
-  {"course": "计算机网络", "prerequisites": ["操作系统"]}
-]
-```
-
-**依赖图可视化：**
-```
-程序设计基础 ──→ 数据结构 ──┬──→ 操作系统 ──→ 计算机网络
-                             ├──→ 编译原理
-                             └──→ 数据库系统
-```
-
-**阻塞系数计算：**
-
-对每门未修课程，计算其"阻塞系数" = 该课程在依赖图中可达的后继节点数量（即不修这门课会阻塞多少后续课程）。
-
-```python
-# 示例：数据结构的阻塞系数
-# 数据结构 → 操作系统, 编译原理, 数据库系统 (3门直接后继)
-# 操作系统 → 计算机网络 (1门间接后继)
-# 阻塞系数 = 3 + 1 = 4
-
-# 程序设计基础（假设已修）：阻塞系数 = 0（已满足）
-# 编译原理（未修）：阻塞系数 = 0（没有后继课程依赖它）
-```
-
-**推荐排序逻辑：**
-
-```
-1. 从缺口分析中提取待补课程列表（F1 结构化输出）
-2. 筛选当前/下学期开课的课程
-3. 检查先修关系是否满足（已修课程集合中是否包含所有先修）
-4. 计算每门可修课程的阻塞系数
-5. 按以下权重排序：
-   - 必修 > 选修
-   - 阻塞系数高的优先（不修会连锁阻塞后续选课）
-   - 用户偏好匹配度（LLM 从对话中提取偏好关键词，与课程标签匹配）
-6. LLM 基于排序结果生成自然语言推荐理由
-```
-
-**推荐效果示例：**
-
-> "数据结构是你当前最优先要修的课。它是操作系统、编译原理、数据库系统 3 门课的先修课，如果这学期不修，下学期这 3 门课都无法选修。编译原理虽然也是缺口，但它不阻塞其他课程，可以延后考虑。"
-
-**答辩话术：**
-
-> "我们的选课推荐不是简单地'缺什么补什么'。系统构建了课程先修依赖图，通过拓扑排序计算每门课的'阻塞系数'——如果不修这门课，会导致多少后续课程无法选修。这样推荐出来的课程是全局最优的优先级，而不是局部的。别人要做到同样效果，不仅需要先修关系数据，还需要实现图算法和分析逻辑。"
-
----
-
-### F4 — 课程信息查询
-
-#### 可查询信息
-
-| 字段 | 示例 | 数据来源 |
-|------|------|---------|
-| 开课学期 | 春季 / 秋季 | course_schedule.json |
-| 先修课程 | 程序设计基础 | prerequisites.json |
-| 考核方式 | 期中 + 期末 | course_details.json |
-| 大作业 | 有 / 无，形式说明 | course_details.json |
-| Presentation | 有 / 无 | course_details.json |
-| 工作量评价 | 轻 / 中 / 重 | course_details.json（可选） |
-
-#### 数据格式设计
-
-`data/courses/course_details.json`：
-```json
-[
-  {
-    "course_code": "40130343",
-    "course_name": "数据结构",
-    "exam": {
-      "midterm": true,
-      "final": true
-    },
-    "assignments": {
-      "homework": true,
-      "project": true,
-      "project_type": "个人编程项目",
-      "presentation": false
-    },
-    "workload": "中等",
-    "notes": "每周有编程作业，期末有上机考试"
-  }
-]
-```
-
-#### 实现方式
-
-Agent 通过 Tool 调用 `course_info.py` 服务查询 JSON 数据，将结果交给 LLM 组织为自然语言回复。
-
-#### 数据收集策略
-
-- **MVP 阶段**：手动整理核心课程（约 20-30 门）的信息，覆盖未央书院常见课程
-- **后续扩展**：可考虑爬取课程评教平台数据或收集学生问卷
-
----
-
-### F5 — PDF MD5 缓存
-
-#### 设计
-
-```
-上传 PDF
-  ↓
-计算文件 MD5 (hashlib.md5)
-  ↓
-查询 backend/cache/{md5}.md 是否存在
-  ├─ 存在 → 直接读取 .md 返回（跳过 OCR，秒级响应）
-  └─ 不存在 → 走 OCR 解析 → 结果写入 backend/cache/{md5}.md
-```
-
-#### 缓存元数据
-
-`backend/cache/manifest.json`：
-```json
-{
-  "abc123...": {
-    "original_filename": "成绩单_张三.pdf",
-    "cached_at": "2026-04-03T15:30:00",
-    "file_size": 245678
-  }
-}
-```
-
-#### 清理策略
-
-- 可选：设置缓存过期时间（如 30 天）
-- 可选：限制缓存总大小，LRU 淘汰
-- MVP 阶段不做清理，手动管理即可
-
----
-
-## 四、技术栈
-
-| 组件 | 技术 | 说明 |
-|------|------|------|
-| 后端框架 | FastAPI + Uvicorn | 异步、自动 OpenAPI 文档 |
-| Agent 编排 | LangGraph | 状态图驱动的多轮对话 |
-| OCR | PaddleOCR 云端 API + 本地回退 | 云端优先，失败自动降级 |
-| LLM | DeepSeek API（OpenAI 兼容） | 支持 stream 流式输出 |
-| 前端 | React 18 + TypeScript + Vite + Tailwind | 聊天式 UI |
-| 备选前端 | Streamlit | 快速验证用 |
-| 缓存 | 文件系统（MD5 → .md 映射） | 轻量，无需额外依赖 |
-| 课程数据 | JSON 文件 | 结构化课程信息，MVP 阶段手动维护 |
-
----
-
-## 五、开发优先级
-
-| 优先级 | 功能 | 依赖 | 预估复杂度 |
-|--------|------|------|-----------|
-| **P0** | F5 PDF 缓存 | 无，独立功能 | 低（~50 行） |
-| **P0** | F1 结构化分析升级 | 无，独立于对话架构 | 中（解析器 + 计算逻辑） |
-| **P0** | F2 多轮对话架构 | 无，基础架构 | 高（前后端均需改造） |
-| **P1** | 先修链分析（prerequisite_graph） | F1 结构化输出 + prerequisites.json | 中（图算法） |
-| **P1** | F3 选课推荐 | F2 + 先修链分析 + 课程数据 | 中 |
-| **P2** | F4 课程信息查询 | F2 + 课程详情数据 | 中（数据收集是瓶颈） |
-
-**推荐开发顺序**：
-
-```
-F5（缓存）          ──→ 独立，可立即开发
-F1 结构化升级       ──→ 独立，可与 F5 并行
-F2（对话架构）      ──→ F5/F1 完成后开始
-先修链分析          ──→ 与 F2 并行（纯后端逻辑）
-F3（推荐）          ──→ F2 + 先修链完成后开始
-F4（课程查询）      ──→ F2 完成后开始，数据收集全程同步
-```
-
-**数据收集任务**（与开发并行）：
-- `prerequisites.json`：整理核心课程的先修关系（约 30-50 门课）
-- `course_details.json`：收集课程考核方式、工作量等信息（约 20-30 门课）
-- `course_schedule.json`：整理开课学期、学分等基本信息
-
----
-
-## 六、环境变量
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `DEEPSEEK_API_KEY` | DeepSeek API Key | — |
-| `DEEPSEEK_BASE_URL` | DeepSeek API 地址 | `https://api.deepseek.com` |
-| `DEEPSEEK_MODEL` | DeepSeek 模型 | `deepseek-chat` |
-| `PADDLEOCR_DOC_PARSING_API_URL` | PaddleOCR 云端 API 地址 | `https://paddleocr.com/layout-parsing` |
-| `PADDLEOCR_ACCESS_TOKEN` | PaddleOCR Token | — |
-| `PADDLEOCR_DOC_PARSING_TIMEOUT` | OCR 超时（秒） | `600` |
-| `POPPLER_PATH` | Poppler 路径（Windows 本地 OCR） | — |
-| `HOST` | 后端监听地址 | `0.0.0.0` |
-| `PORT` | 后端监听端口 | `8000` |
-| `DEBUG` | 调试模式 | `false` |
-
-
----
-
-## 附录：通识选修课组分析详细设计
-
-### 背景
-
-未央书院通识选修课采用**四大课组**体系，与其他院系不同的特殊要求：
-
-> "通识选修课11学分，未央书院通识选修课要求包括人文、社科、艺术、科学四大课组，要求学生**科学课组至少修3个学分**，其余三个课组**每个至少修2学分**。"
-
-### 课组学分配置
-
-| 课组 | 配置键 | 最低学分 | 课程数据源 | 特殊说明 |
-|------|--------|---------|-----------|---------|
-| 🔬 科学课组 | `science` | **3.0** | `generalEdu/science.md` | ⚠️ 注意：比其他课组多1学分！ |
-| 📚 人文课组 | `humanities` | 2.0 | `generalEdu/Humanities.md` | 含必修《科技与人文研讨课》（1学分） |
-| 🏛️ 社科课组 | `social` | 2.0 | `generalEdu/Social.md` | 社会科学类课程 |
-| 🎨 艺术课组 | `art` | 2.0 | `generalEdu/Art.md` | 音乐、美术、戏剧等 |
-
-**总要求**: 11学分 = (3+2+2+2) 最低要求 + 额外2学分
-
-### 实现代码
-
-文件: `backend/services/general_edu_service.py`
-
-```python
-class GeneralEduService:
-    """通识选修课服务"""
-    
-    # ⚠️ 重要：科学课组是3学分，其他是2学分
-    GROUP_CONFIG = {
-        'science': {
-            'name': '科学课组',
-            'file': 'science.md',
-            'min_credits': 3.0,  # 未央书院特殊要求
-        },
-        'humanities': {
-            'name': '人文课组',
-            'file': 'Humanities.md',
-            'min_credits': 2.0,
-        },
-        'social': {
-            'name': '社科课组',
-            'file': 'Social.md',
-            'min_credits': 2.0,
-        },
-        'art': {
-            'name': '艺术课组',
-            'file': 'Art.md',
-            'min_credits': 2.0,
-        },
     }
-    
-    TOTAL_REQUIRED_CREDITS = 11.0
+
+]
+
 ```
 
-### 课程匹配逻辑
+### 3.3 图模型 (Neo4j)
+
+```cypher
+
+// 培养方案规则图
+
+(:Program {name: "CS-2022"})-[:HAS_GROUP]->(:ReqGroup {name: "专业核心", min_credits: 20})
+
+(:ReqGroup)-[:ALLOWS]->(:Category {code: "CS_CORE"})
+
+(:Course {code: "CS202"})-[:BELONGS_TO]->(:Category {code: "CS_CORE"})
+
+
+
+// 课程依赖链
+
+(:Course {code: "CS202"})-[:PREREQUISITE {strict: true, type: "hard"}]->(:Course {code: "CS101"})
+
+(:Course {code: "CS301"})-[:PREREQUISITE {strict: false, type: "recommended"}]->(:Course {code: "MATH201"})
+
+
+
+// 互斥关系（替代课程）
+
+(:Course {code: "CS102"})-[:MUTUALLY_EXCLUSIVE {reason: "content_overlap"}]->(:Course {code: "EE105"})
+
+
+
+// 评价关系
+
+(:Student)-[:RATED {quality: 5, difficulty: 4, semester: "2024S"}]->(:CourseOffering)
+
+(:CourseOffering)-[:INSTANCE_OF]->(:Course)
+
+```
+
+---
+
+
+
+## 4. 核心算法流程
+
+### 4.1 约束满足引擎 (Constraint Engine)
+
+**缺口计算算法 (Gap Analysis)**
 
 ```python
-def analyze_completion(self, completed_courses):
-    for group_key, config in self.GROUP_CONFIG.items():
-        group_courses = self._group_courses.get(group_key, [])
+
+class CurriculumEngine:
+
+    def calculate_gaps(self, user_id: str) -> List[RequirementGap]:
+
+        """
+
+        识别用户为满足培养方案而必须填补的缺口
+
+        """
+
+        # 1. 获取用户已完成课程
+
+        completed = self.get_completed_courses(user_id)
+
         
-        for course in completed_courses:
-            # 1. 课程号精确匹配（清洗引号）
-            if course_code and ge_course.code == course_code:
-                is_in_group = True
-                
-            # 2. 课程名模糊匹配（双向包含）
-            if course_name and (ge_course.name in course_name 
-                               or course_name in ge_course.name):
-                is_in_group = True
+
+        # 2. 获取培养方案要求（图遍历）
+
+        program_rules = self.graph.get_program_structure(user_id)
+
+        
+
+        gaps = []
+
+        for group in program_rules.requirement_groups:
+
+            # 学分缺口计算
+
+            if group.type == "credit_based":
+
+                earned = sum(c.credits for c in completed if c.category in group.allowed_categories)
+
+                if earned < group.min_credits:
+
+                    gaps.append(CreditGap(
+
+                        group_id=group.id,
+
+                        remaining=group.min_credits - earned,
+
+                        allowed_categories=group.allowed_categories
+
+                    ))
+
             
-            if is_in_group and course.get('is_passed', True):
-                earned_credits += course_credits
+
+            # 特定课程缺口（如必修缺哪几门）
+
+            elif group.type == "course_based":
+
+                missing = set(group.required_courses) - set(c.id for c in completed)
+
+                if missing:
+
+                    gaps.append(CourseGap(group_id=group.id, required_courses=missing))
+
+        
+
+        return gaps
+
 ```
 
-### 常见问题与修复
+**先修课验证 (Prerequisite Check)**
 
-**Bug 1: 科学课组学分计算错误**
-- 症状：科学课组显示已完成（2学分），但系统提示还需1学分
-- 原因：`min_credits` 被错误设置为 2.0 而不是 3.0
-- 修复：确保 `GROUP_CONFIG['science']['min_credits'] = 3.0`
+```python
 
-**Bug 2: 课程匹配失败**
-- 症状：已修通识课未被识别到对应课组
-- 原因：课程号格式不一致（如带引号 `'00000011'` vs `00000011`）
-- 修复：匹配时清洗课程号 `code.replace("'", "").replace('"', '')`
+def check_prerequisites(course_id: str, completed_courses: Set[str], graph) -> Tuple[bool, List[str]]:
 
-**Bug 3: 未通过课程被计入**
-- 症状：挂科的通识课被算入已完成学分
-- 修复：检查 `course.get('is_passed', True)` 只统计通过课程
+    """
 
-### 分析输出示例
+    使用图遍历检查所有先修课是否满足（支持软先修/硬先修）
 
-```json
+    """
+
+    query = """
+
+    MATCH path = (c:Course {id: $course_id})-[:PREREQUISITE*1..10]->(p:Course)
+
+    RETURN p.id as prereq_id, r.type as req_type
+
+    """
+
+    prerequisites = graph.run(query, course_id=course_id).data()
+
+    
+
+    violations = []
+
+    for prereq in prerequisites:
+
+        if prereq['req_type'] == 'hard' and prereq['prereq_id'] not in completed_courses:
+
+            violations.append(prereq['prereq_id'])
+
+    
+
+    return len(violations) == 0, violations
+
+```
+
+### 4.2 推荐引擎 (Recommendation Engine)
+
+**两阶段过滤 + 多目标排序**
+
+```python
+
+class CourseRecommender:
+
+    def recommend(self, user_id: str, query_intent: Dict, top_k: int = 10) -> List[Recommendation]:
+
+        # Phase 1: 硬约束过滤（从1000+门课筛选到~100门候选）
+
+        candidates = self.hard_filter(user_id)
+
+        # 过滤条件：
+
+        # - 满足缺口要求（这门课能计入某未完成模块）
+
+        # - 先修课已满足
+
+        # - 时间冲突排除
+
+        # - 容量未满
+
+        
+
+        if not candidates:
+
+            return []  # 触发"冲突消解对话"（LLM介入）
+
+        
+
+        # Phase 2: 多目标评分（候选集内精排）
+
+        scored = []
+
+        for course in candidates:
+
+            score = self.multi_objective_score(course, user_id)
+
+            scored.append((course, score))
+
+        
+
+        # Phase 3: 多样化重排序（避免全推同一时间段/同一老师）
+
+        diversified = self.diversify_results(scored, top_k)
+
+        
+
+        return diversified
+
+    
+
+    def multi_objective_score(self, course: Course, user_id: str) -> float:
+
+        """
+
+        加权评分公式（硬编码，可解释）
+
+        """
+
+        # 1. 约束满足度 (40%)
+
+        gap_fitness = self.calculate_gap_fitness(course, user_id)  # 填补缺口能力
+
+        unlock_potential = self.calculate_unlock_potential(course, user_id)  # 解锁后续课程数
+
+        
+
+        # 2. 课程质量 (35%)
+
+        quality = course.avg_quality / 5.0  # 归一化
+
+        difficulty_match = 1 - abs(course.avg_difficulty - self.user_ability[user_id]) / 4.0
+
+        
+
+        # 3. 个性化 (25%)
+
+        content_sim = self.vector_similarity(course, self.user_preference_vector[user_id])
+
+        
+
+        # 加权总和
+
+        return (
+
+            0.25 * gap_fitness + 
+
+            0.15 * unlock_potential + 
+
+            0.25 * quality + 
+
+            0.10 * difficulty_match + 
+
+            0.25 * content_sim
+
+        )
+
+```
+
+**学期级课表优化 (ILP Solver)**
+
+```python
+
+def optimize_schedule(self, user_id: str, gaps: List[Gap]) -> List[Course]:
+
+    """
+
+    使用整数线性规划求解最优学期课表
+
+    目标：在满足所有缺口的前提下，最大化总评分且平衡工作量
+
+    """
+
+    prob = LpProblem("Semester_Schedule", LpMaximize)
+
+    
+
+    # 决策变量：是否选这门课
+
+    course_vars = {c.id: LpVariable(f"x_{c.id}", cat='Binary') 
+
+                   for c in self.available_courses}
+
+    
+
+    # 目标函数：最大化推荐分数 - 工作量惩罚（防止全选硬核课）
+
+    prob += lpSum([course_vars[c.id] * c.score for c in self.available_courses]) - \
+
+            0.05 * lpSum([course_vars[c.id] * c.workload for c in self.available_courses])
+
+    
+
+    # 约束1：必须满足所有学分缺口
+
+    for gap in gaps:
+
+        if isinstance(gap, CreditGap):
+
+            prob += lpSum([
+
+                course_vars[c.id] * c.credits 
+
+                for c in self.available_courses 
+
+                if c.category in gap.allowed_categories
+
+            ]) >= gap.remaining_credits
+
+    
+
+    # 约束2：总学分不超过学期上限（如25学分）
+
+    prob += lpSum([course_vars[c.id] * c.credits for c in self.available_courses]) <= 25
+
+    
+
+    # 约束3：时间冲突（预计算冲突矩阵）
+
+    for c1, c2 in self.time_conflicts:
+
+        prob += course_vars[c1.id] + course_vars[c2.id] <= 1
+
+    
+
+    prob.solve()
+
+    return [c for c in self.available_courses if course_vars[c.id].value() == 1]
+
+```
+
+### 4.3 LLM增强层 (LLM Augmentation)
+
+**查询路由 (Query Router)**
+
+```python
+
+class QueryRouter:
+
+    def route(self, user_query: str) -> RetrievalStrategy:
+
+        """
+
+        使用轻量级LLM分类查询类型，决定检索路径
+
+        """
+
+        prompt = f"""
+
+        分析学生查询意图，返回JSON格式：
+
+        查询: "{user_query}"
+
+        
+
+        分类：
+
+        - entity_lookup: 实体查询（特定老师/课号）-> 图数据库精确匹配
+
+        - aggregate: 聚合统计（"平均分如何"）-> SQL聚合查询
+
+        - semantic: 语义探索（"适合文科生的编程课"）-> 向量检索+重排序
+
+        - complex: 复杂推理（"没学高数能选ML吗"）-> 图+LLM混合推理
+
+        """
+
+        result = llm.generate_json(prompt, temperature=0.0)
+
+        return RetrievalStrategy(result['classification'])
+
+```
+
+**推荐理由生成 (Explanation Generation)**
+
+```python
+
+def generate_explanation(self, recommendation: Recommendation, user_id: str) -> str:
+
+    """
+
+    基于硬编码计算出的结构化数据，生成自然语言解释
+
+    """
+
+    context = {
+
+        "course_name": recommendation.course.title,
+
+        "teacher": recommendation.course.teacher_name,
+
+        "quality_score": recommendation.course.avg_quality,
+
+        "gap_filled": recommendation.gap_filled,  # 填补哪个模块缺口
+
+        "prerequisites_met": recommendation.prereqs_met,
+
+        "difficulty": recommendation.course.avg_difficulty,
+
+        "user_profile": self.get_user_summary(user_id)
+
+    }
+
+    
+
+    prompt = f"""
+
+    基于以下结构化数据，为学生生成个性化选课建议（2-3句话）：
+
+    {json.dumps(context, ensure_ascii=False)}
+
+    
+
+    要求：
+
+    1. 说明这门课为什么适合该学生（结合其培养方案缺口和历史偏好）
+
+    2. 提及课程评分数据（如"往届学生评分4.8/5"）
+
+    3. 如有先修课要求，确认其已满足
+
+    4. 语气友好、专业，避免过度承诺
+
+    
+
+    示例输出：
+
+    "这门《数据结构》能帮你补齐专业核心模块的6学分缺口。授课老师张老师评分4.8分，\
+
+    学生评价'项目实战多'，与你偏好的实践类课程匹配。你已修完先修课《C语言》，可以顺利选修。"
+
+    """
+
+    return llm.generate(prompt, temperature=0.7)
+
+```
+
+---
+
+
+
+## 5. API 接口设计
+
+### 5.1 核心API端点
+
+```yaml
+
+# 查询培养方案缺口
+
+GET /api/v1/users/{user_id}/gaps
+
+Response:
+
 {
-  "general_edu_analysis": {
-    "total_required": 11.0,
-    "total_earned": 8.0,
-    "total_missing": 3.0,
-    "all_groups_complete": false,
-    "groups": [
-      {
-        "group_name": "科学课组",
-        "group_key": "science",
-        "credits_required": 3.0,
-        "credits_earned": 2.0,
-        "credits_missing": 1.0,
-        "is_complete": false,
-        "completed_courses": [{"name": "人工智能与未来交通", "credits": 2.0}]
-      },
-      {
-        "group_name": "人文课组",
-        "group_key": "humanities",
-        "credits_required": 2.0,
-        "credits_earned": 3.0,
-        "credits_missing": 0.0,
-        "is_complete": true,
-        "completed_courses": [{"name": "科技与人文研讨课", "credits": 1.0}, ...]
-      }
-    ]
-  }
+
+  "gaps": [
+
+    {
+
+      "group": "专业选修",
+
+      "type": "credits",
+
+      "required": 6,
+
+      "completed": 2,
+
+      "remaining": 4,
+
+      "deadline": "2026-06-30"
+
+    }
+
+  ]
+
 }
+
+
+
+# 获取推荐（核心接口）
+
+POST /api/v1/recommendations
+
+Body:
+
+{
+
+  "user_id": "U2022001",
+
+  "query": "我想选一门给分好的数理基础课",
+
+  "constraints": {
+
+    "exclude_time_slots": ["Mon 08:00-09:35"],
+
+    "max_difficulty": 4.0
+
+  }
+
+}
+
+Response:
+
+{
+
+  "recommendations": [
+
+    {
+
+      "course": {
+
+        "id": "MATH201",
+
+        "title": "线性代数",
+
+        "teacher": "李四",
+
+        "credits": 4,
+
+        "schedule": "Wed 14:00-15:35"
+
+      },
+
+      "score": 0.92,
+
+      "reasoning": {
+
+        "gap_fitness": 0.67,      # 填补4学分中的4学分
+
+        "quality_score": 4.7,
+
+        "difficulty_match": 0.85,
+
+        "explanation": "这门课能帮你补齐数理基础模块剩余的4学分缺口..."
+
+      }
+
+    }
+
+  ],
+
+  "query_intent": {
+
+    "type": "semantic",
+
+    "extracted_constraints": {"category": "数理基础", "quality_focus": true}
+
+  }
+
+}
+
+
+
+# 检查选课方案可行性
+
+POST /api/v1/schedule/validate
+
+Body:
+
+{
+
+  "user_id": "U2022001",
+
+  "proposed_courses": ["CS202", "MATH201", "PHY101"]
+
+}
+
+Response:
+
+{
+
+  "valid": false,
+
+  "violations": [
+
+    {
+
+      "type": "time_conflict",
+
+      "courses": ["CS202", "PHY101"],
+
+      "conflict_slots": ["Fri 10:00-11:35"]
+
+    },
+
+    {
+
+      "type": "prerequisite_missing",
+
+      "course": "CS202",
+
+      "missing_prereq": "CS101"
+
+    }
+
+  ],
+
+  "alternatives": [
+
+    {
+
+      "original": "PHY101",
+
+      "suggestion": "PHY102（同时间段周三班，内容相同）"
+
+    }
+
+  ]
+
+}
+
 ```
 
-### 相关文件
+---
 
-- `backend/services/general_edu_service.py` - 通识课分析核心服务
-- `backend/services/general_edu_recommendation.py` - 通识课推荐引擎
-- `backend/agent/general_edu_tools.py` - Agent 工具函数
-- `generalEdu/*.md` - 四大课组课程清单（共 700+ 门课程）
+
+
+## 6. 技术栈选型
+
+
+| 组件     | 推荐方案                    | 备选方案                  | 选型理由                           |
+| ------ | ----------------------- | --------------------- | ------------------------------ |
+| 主数据库   | PostgreSQL + pgvector   | MySQL + 独立向量库         | JSONB 支持灵活标签，pgvector 支持向量联合查询 |
+| 图数据库   | Neo4j                   | Dgraph                | Cypher 查询直观，社区成熟，支持复杂路径查询      |
+| 向量检索   | pgvector (IVFFlat/HNSW) | Milvus, Pinecone      | 减少技术栈复杂度，同一数据库内完成混合查询          |
+| LLM    | GPT-4o (复杂推理)           | Claude 3.5, Kimi K2.5 | JSON mode 可靠，适合意图识别            |
+| 轻量 LLM | Local Mistral-7B        | Phi-3, Gemma-2B       | 本地部署用于简单分类，降低 API 成本           |
+| 优化求解   | PuLP (Python)           | Google OR-Tools       | 轻量级 ILP 求解，足够处理学期课表优化          |
+| 缓存层    | Redis                   | Memcached             | 缓存热门课程评分和 LLM 生成解释             |
+| API 框架 | FastAPI                 | Flask, Go             | 异步支持，OpenAPI 自动生成              |
+
+
+---
+
+
+
+## 7. 实施路线图 (MVP → Production)
+
+### Phase 1: 数据基础 (Week 1-2)
+
+- 设计并实现PostgreSQL schema（课程、用户、评分表）
+- 导入历史课程数据（至少2个学期的完整数据）
+- 构建培养方案图模型（至少1个专业的完整规则）
+- 实现基础CRUD API
+
+### Phase 2: 约束引擎 (Week 3-4)
+
+- 实现缺口计算算法（Gap Analysis）
+- 实现先修课检查（图遍历）
+- 实现时间冲突检测
+- 构建验证API（检查课表可行性）
+
+### Phase 3: 推荐核心 (Week 5-6)
+
+- 实现硬约束过滤（SQL层面）
+- 实现多目标评分公式
+- 集成ILP求解器进行学期优化
+- 集成向量数据库（课程描述Embedding）
+
+### Phase 4: LLM增强 (Week 7-8)
+
+- 实现查询路由（Query Router）
+- 实现查询改写（自然语言→结构化）
+- 实现推荐理由生成（基于硬编码结果）
+- 实现评价情感分析（离线批处理）
+
+### Phase 5: 集成与优化 (Week 9-10)
+
+- 端到端Agent流程集成
+- 添加缓存层（Redis）
+- 压力测试（目标：100并发下推荐延迟<2s）
+- 异常处理（无满足方案时的协商对话）
+
+---
+
+
+
+## 8. 关键设计决策 (ADR)
+
+### ADR-001: 混合数据库架构
+
+**决策**: 采用 PostgreSQL (关系型) + Neo4j (图) + pgvector (向量) 而非单一数据库
+
+**理由**:
+
+- 培养方案约束需要图遍历（Neo4j最擅长）
+- 评分聚合需要复杂SQL窗口函数（PostgreSQL最擅长）
+- 语义搜索需要向量相似度（pgvector避免数据同步延迟）
+
+### ADR-002: 约束满足优先于评分优化
+
+**决策**: 推荐算法第一阶段必须过滤掉不满足培养方案的课程，第二阶段才考虑评分
+
+**理由**:
+
+- 毕业资格是硬性约束，不能妥协
+- 减少LLM需要考虑的候选集规模（1000→50），降低成本
+
+### ADR-003: LLM 仅用于“解释”而非“决策”
+
+**决策**: 课程是否可选、评分计算、时间冲突检测必须由硬编码完成，LLM 仅用于生成解释文本和意图理解
+
+**理由**:
+
+- 数学计算和逻辑判断的确定性要求（不能出现"可能满足先修课"）
+- 成本考虑：硬编码查询成本为0，LLM调用成本较高
+- 可测试性：硬编码逻辑可以单元测试，LLM输出难以精确测试
+
+### ADR-004: 预计算 vs 实时计算
+
+**决策**:
+
+- 课程评分聚合、评价情感分析 → 预计算（每小时物化视图刷新）
+- 用户缺口计算、课表冲突检测 → 实时计算（数据更新频繁）
+- 向量Embedding → 预计算（课程内容不常变，但查询时做ANN检索）
+
+---
+
+
+
+## 9. 风险评估与缓解
+
+
+| 风险         | 影响  | 缓解策略                                              |
+| ---------- | --- | ------------------------------------------------- |
+| LLM 意图识别错误 | 高   | 添加置信度阈值，低置信度时回退到关键词匹配；提供用户确认机制                    |
+| 培养方案规则变更   | 高   | 版本控制：`program_id` 包含版本号（如 `CS-2022-v3`）；历史用户绑定旧版本 |
+| 课程无历史评分    | 中   | 冷启动策略：新课使用教师历史评分均值；相似课程评分加权                       |
+| 性能瓶颈（向量检索） | 中   | HNSW 索引；结果缓存；相似查询合并                               |
+| 数据隐私（学生成绩） | 高   | 数据脱敏：LLM 层不接触真实成绩，仅接触分类后的“能力等级”；API 权限控制          |
+
+
+---
+
+
+
+## 10. 成功指标 (KPI)
+
+### 1. 准确性指标
+
+- 推荐课程的先修课满足率：>99%
+- 培养方案缺口填补成功率：>95%
+- 时间冲突检测准确率：100%
+
+### 2. 用户体验指标
+
+- 端到端响应时间（查询→推荐）：< 2秒
+- 推荐接受率（学生实际选择推荐课程的比例）：> 40%
+- 自然语言查询理解准确率（人工抽检）：> 85%
+
+### 3. 系统健康指标
+
+- API可用性：> 99.5%
+- LLM调用成本/查询：<0.02（通过缓存和轻量模型降低）
+
+---
+
+
+
+## 附录：示例交互流程
+
+**场景**: 学生问“我下学期该选什么课才能按时毕业，想要给分好的”
+
+**系统内部流程**:
+
+1. 意图层 (LLM): 识别为`gap_filling` + `quality_preference`，提取时间范围"下学期"
+2. 引擎层 (硬编码):
+  - 查询用户缺口：发现专业选修差6学分，且必修CS202未修
+  - 过滤候选：先修课检查排除CS301（因CS202未修），时间冲突排除周五早八课程
+  - 生成候选集：CS202（必修，4分）、CS205（选修，3分）、CS210（选修，3分）
+  - 评分计算：CS202（0.95分，缺口填补1.0 + 质量0.8）、CS205（0.88分）、CS210（0.82分）
+  - ILP优化：推荐组合[CS202, CS205]（总学分7，满足缺口）
+3. 接口层 (LLM): 生成解释："推荐您下学期选修《数据结构》(CS202)和《数据库原理》(CS205)。前者是专业必修且为您解锁6门高阶课，张老师授课评分4.6分；后者可填补选修学分缺口，学生评价'给分 generous'..."
+
+---
+
+**文档维护**: 本 Prototype 应随技术选型和业务需求变更迭代，每次重大架构决策需更新 ADR 章节。
